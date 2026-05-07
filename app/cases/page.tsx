@@ -254,7 +254,7 @@ export default function CasesPage() {
 
   const headerActions = (
     <div className="flex items-center gap-2">
-      {isAppointer && (
+      {(isAppointer || isAdmin) && (
         <button onClick={() => setTab("add")}
           className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold transition-colors">
           <Plus size={15} /> 新規登録
@@ -277,7 +277,7 @@ export default function CasesPage() {
           className={`px-5 py-2 rounded-xl text-sm font-medium transition-all ${tab === "list" ? "bg-indigo-600 text-white shadow-sm" : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"}`}>
           案件一覧
         </button>
-          {isAppointer && (
+          {(isAppointer || isAdmin) && (
           <button onClick={() => setTab("add")}
             className={`px-5 py-2 rounded-xl text-sm font-medium transition-all ${tab === "add" ? "bg-indigo-600 text-white shadow-sm" : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"}`}>
             新規登録
@@ -412,7 +412,7 @@ export default function CasesPage() {
       )}
 
       {/* ══════ 新規登録（アポインターのみ） ══════ */}
-      {tab === "add" && isAppointer && (
+      {tab === "add" && (isAppointer || isAdmin) && (
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 max-w-2xl">
           <h3 className="text-base font-semibold text-gray-700 mb-5">新規案件登録</h3>
           <form onSubmit={handleAdd} className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -503,6 +503,25 @@ export default function CasesPage() {
                   className={`${inputCls} pl-8`} />
               </div>
             </Field>
+
+            {/* 管理者のみ：ステータス・営業担当者名 */}
+            {isAdmin && (
+              <>
+                <Field label="ステータス">
+                  <select value={(addForm as {status?: string}).status ?? "未実行"}
+                    onChange={(e) => setAddForm({ ...addForm, status: e.target.value } as typeof addForm)}
+                    className={inputCls}>
+                    {ALL_STATUSES.map((s) => <option key={s}>{s}</option>)}
+                  </select>
+                </Field>
+                <Field label="営業担当者名">
+                  <input value={(addForm as {salesPerson?: string}).salesPerson ?? ""}
+                    onChange={(e) => setAddForm({ ...addForm, salesPerson: e.target.value } as typeof addForm)}
+                    placeholder="隅田、片野 など"
+                    className={inputCls} />
+                </Field>
+              </>
+            )}
 
             <div className="md:col-span-2 flex gap-3 pt-2">
               <button type="submit" disabled={saving}

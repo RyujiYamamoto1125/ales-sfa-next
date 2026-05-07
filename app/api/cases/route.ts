@@ -18,8 +18,9 @@ export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  if (session.user.role !== "appointer") {
-    return NextResponse.json({ error: "Forbidden: 新規登録はアポインターのみ可能です" }, { status: 403 });
+  const role = session.user.role;
+  if (role === "sales") {
+    return NextResponse.json({ error: "Forbidden: 新規登録はアポインター・管理者のみ可能です" }, { status: 403 });
   }
 
   await initSchema();
@@ -32,7 +33,7 @@ export async function POST(req: NextRequest) {
       customer_name, position, furigana,
       email_address, phone, notes,
       appointer, next_meeting,
-      status
+      status, sales_person
     )
     VALUES (
       ${body.leadSource ?? null},
@@ -45,7 +46,8 @@ export async function POST(req: NextRequest) {
       ${body.notes ?? null},
       ${body.appointer ?? null},
       ${body.nextMeeting ? new Date(body.nextMeeting) : null},
-      '未実行'
+      ${body.status ?? '未実行'},
+      ${body.salesPerson ?? null}
     )
     RETURNING *
   `;
