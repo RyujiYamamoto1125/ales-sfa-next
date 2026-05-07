@@ -427,9 +427,9 @@ export default function CasesPage() {
               </select>
             </Field>
 
-            {/* 2. 資料請求日（必須） */}
-            <Field label={<>資料請求日 <span className="text-red-400">*</span></>}>
-              <input required type="date" value={addForm.documentRequestDate}
+            {/* 2. 資料請求日（任意） */}
+            <Field label="資料請求日">
+              <input type="date" value={addForm.documentRequestDate}
                 onChange={(e) => setAddForm({ ...addForm, documentRequestDate: e.target.value })}
                 className={inputCls} />
             </Field>
