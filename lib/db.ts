@@ -24,6 +24,9 @@ export async function initSchema() {
     CREATE TABLE IF NOT EXISTS cases (
       id SERIAL PRIMARY KEY,
       customer_name VARCHAR(255) NOT NULL,
+      contact_person VARCHAR(255),
+      email_address VARCHAR(255),
+      phone VARCHAR(50),
       status VARCHAR(100) DEFAULT '未実行',
       next_meeting TIMESTAMP,
       sales_person VARCHAR(255),
@@ -36,6 +39,9 @@ export async function initSchema() {
     )
   `;
   await db`ALTER TABLE cases ADD COLUMN IF NOT EXISTS amount INTEGER DEFAULT 0`;
+  await db`ALTER TABLE cases ADD COLUMN IF NOT EXISTS contact_person VARCHAR(255)`;
+  await db`ALTER TABLE cases ADD COLUMN IF NOT EXISTS email_address VARCHAR(255)`;
+  await db`ALTER TABLE cases ADD COLUMN IF NOT EXISTS phone VARCHAR(50)`;
 
   await db`
     CREATE TABLE IF NOT EXISTS targets (
