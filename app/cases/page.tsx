@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import AppLayout from "@/components/AppLayout";
+import Papa from "papaparse";
 import {
   Plus, Filter, Download, ChevronDown, ChevronUp,
   Mail, Phone, User, Calendar, FileCheck, TrendingUp,
+  Upload, FileSpreadsheet, CheckCircle2, XCircle, AlertCircle,
 } from "lucide-react";
 
 // ── 定数 ─────────────────────────────────────────────
@@ -84,7 +86,7 @@ export default function CasesPage() {
 
   const [cases, setCases]   = useState<CaseData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab]         = useState<"list" | "add">("list");
+  const [tab, setTab]         = useState<"list" | "add" | "import">("list");
   const [filterStatus, setFilterStatus]       = useState("すべて");
   const [filterAppointer, setFilterAppointer] = useState("");
   const [filterSales, setFilterSales]         = useState("");
@@ -228,12 +230,22 @@ export default function CasesPage() {
     a.click();
   }
 
-  const headerActions = isAppointer ? (
-    <button onClick={() => setTab("add")}
-      className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold transition-colors">
-      <Plus size={15} /> 新規登録
-    </button>
-  ) : undefined;
+  const headerActions = (
+    <div className="flex items-center gap-2">
+      {isAppointer && (
+        <button onClick={() => setTab("add")}
+          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold transition-colors">
+          <Plus size={15} /> 新規登録
+        </button>
+      )}
+      {isAdmin && (
+        <button onClick={() => setTab("import")}
+          className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-semibold transition-colors">
+          <Upload size={15} /> CSVインポート
+        </button>
+      )}
+    </div>
+  );
 
   return (
     <AppLayout title="案件管理" actions={headerActions}>
@@ -243,10 +255,16 @@ export default function CasesPage() {
           className={`px-5 py-2 rounded-xl text-sm font-medium transition-all ${tab === "list" ? "bg-indigo-600 text-white shadow-sm" : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"}`}>
           案件一覧
         </button>
-        {isAppointer && (
+          {isAppointer && (
           <button onClick={() => setTab("add")}
             className={`px-5 py-2 rounded-xl text-sm font-medium transition-all ${tab === "add" ? "bg-indigo-600 text-white shadow-sm" : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"}`}>
             新規登録
+          </button>
+        )}
+        {isAdmin && (
+          <button onClick={() => setTab("import")}
+            className={`px-5 py-2 rounded-xl text-sm font-medium transition-all ${tab === "import" ? "bg-emerald-600 text-white shadow-sm" : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"}`}>
+            CSVインポート
           </button>
         )}
       </div>
@@ -439,6 +457,11 @@ export default function CasesPage() {
             </div>
           </form>
         </div>
+      )}
+
+      {/* ══════ CSVインポート（管理者のみ） ══════ */}
+      {tab === "import" && isAdmin && (
+        <CsvImportPanel onImported={() => { fetchCases(); setTab("list"); }} />
       )}
     </AppLayout>
   );
@@ -713,6 +736,207 @@ function PanelActions({ onSave, onCancel, saving, saveDisabled, onDelete }: {
         className="px-5 py-2 bg-gray-100 text-gray-600 rounded-xl text-sm font-semibold hover:bg-gray-200 transition-colors">
         キャンセル
       </button>
+    </div>
+  );
+}
+
+// ── CSVインポートパネル ──────────────────────────────
+const CSV_HEADERS = [
+  "顧客名","担当者名","メールアドレス","電話番号","ステータス",
+  "商談日時","営業担当者名","アポインター名","会話メモ",
+  "初期費用","月額費用","売上金額","契約書返送日","初回引落日","契約日",
+];
+
+const CSV_EXAMPLE = [
+  "株式会社サンプル","山田 太郎","yamada@sample.com","090-1234-5678","契約",
+  "2026/05/01 14:00","隅田","荒木","見込みあり。資料送付済み。",
+  "100000","30000","","2026/05/10","2026/06/01","2026/05/07",
+];
+
+interface ImportResult {
+  row: number; status: "ok" | "error"; message?: string; customerName?: string;
+}
+
+function CsvImportPanel({ onImported }: { onImported: () => void }) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
+  const [preview, setPreview]   = useState<Record<string, string>[]>([]);
+  const [fileName, setFileName] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [results, setResults]   = useState<{ successCount: number; errorCount: number; results: ImportResult[] } | null>(null);
+
+  function downloadTemplate() {
+    const csv = [CSV_HEADERS, CSV_EXAMPLE].map(r => r.map(v => `"${v}"`).join(",")).join("\n");
+    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "案件インポートテンプレート.csv";
+    a.click();
+  }
+
+  function parseFile(file: File) {
+    if (!file.name.endsWith(".csv")) { alert("CSVファイルを選択してください"); return; }
+    setFileName(file.name);
+    setResults(null);
+    Papa.parse<Record<string, string>>(file, {
+      header: true,
+      skipEmptyLines: true,
+      encoding: "UTF-8",
+      complete: (res) => setPreview(res.data),
+    });
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault(); setDragging(false);
+    const file = e.dataTransfer.files[0];
+    if (file) parseFile(file);
+  }
+
+  async function handleImport() {
+    if (!preview.length) return;
+    setImporting(true);
+    const res = await fetch("/api/cases/import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(preview),
+    });
+    const data = await res.json();
+    setResults(data);
+    setImporting(false);
+    if (data.successCount > 0) onImported();
+  }
+
+  return (
+    <div className="max-w-4xl space-y-5">
+      {/* テンプレートDL */}
+      <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+        <div className="flex items-start justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-700 mb-1 flex items-center gap-2">
+              <FileSpreadsheet size={16} className="text-emerald-600" /> CSVテンプレート
+            </h3>
+            <p className="text-xs text-gray-400 mb-1">下記のカラム構成で作成してください。文字コードはUTF-8推奨。</p>
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {CSV_HEADERS.map((h) => (
+                <span key={h} className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{h}</span>
+              ))}
+            </div>
+          </div>
+          <button onClick={downloadTemplate}
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-semibold transition-colors shrink-0 ml-4">
+            <Download size={14} /> テンプレートDL
+          </button>
+        </div>
+        <div className="mt-3 text-xs text-gray-400 bg-gray-50 rounded-xl p-3">
+          <span className="font-semibold text-gray-600">ステータスの選択肢：</span>
+          {" 未実行 / 見込み（高）/ 見込み（中）/ 見込み（低）/ NG / 不参加 / 申し込みフォーム返送待ち / 契約"}
+        </div>
+      </div>
+
+      {/* アップロードエリア */}
+      <div
+        onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={handleDrop}
+        onClick={() => fileRef.current?.click()}
+        className={`bg-white rounded-2xl border-2 border-dashed transition-all cursor-pointer flex flex-col items-center justify-center py-12 shadow-sm ${
+          dragging ? "border-emerald-400 bg-emerald-50" : "border-gray-200 hover:border-indigo-300 hover:bg-gray-50"
+        }`}>
+        <input ref={fileRef} type="file" accept=".csv" className="hidden"
+          onChange={(e) => { if (e.target.files?.[0]) parseFile(e.target.files[0]); }} />
+        <Upload size={32} className={dragging ? "text-emerald-500" : "text-gray-300"} />
+        <p className="text-sm font-medium text-gray-500 mt-3">
+          {fileName ? fileName : "CSVファイルをドラッグ＆ドロップ、またはクリックして選択"}
+        </p>
+        <p className="text-xs text-gray-400 mt-1">UTF-8 / Shift-JIS 対応</p>
+      </div>
+
+      {/* プレビュー */}
+      {preview.length > 0 && !results && (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-50 flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-semibold text-gray-700">プレビュー</h3>
+              <p className="text-xs text-gray-400 mt-0.5">合計 {preview.length}件 — 先頭5件を表示</p>
+            </div>
+            <button onClick={handleImport} disabled={importing}
+              className="flex items-center gap-2 px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-semibold disabled:opacity-50 transition-colors">
+              <Upload size={14} />
+              {importing ? "インポート中..." : `${preview.length}件をインポート`}
+            </button>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-gray-50">
+                  {CSV_HEADERS.slice(0, 8).map((h) => (
+                    <th key={h} className="px-4 py-2.5 text-left font-semibold text-gray-400 whitespace-nowrap">{h}</th>
+                  ))}
+                  <th className="px-4 py-2.5 text-left font-semibold text-gray-400">…</th>
+                </tr>
+              </thead>
+              <tbody>
+                {preview.slice(0, 5).map((row, i) => (
+                  <tr key={i} className="border-t border-gray-50 hover:bg-gray-50">
+                    {CSV_HEADERS.slice(0, 8).map((h) => (
+                      <td key={h} className="px-4 py-2.5 text-gray-600 whitespace-nowrap max-w-32 truncate">
+                        {row[h] || <span className="text-gray-300">—</span>}
+                      </td>
+                    ))}
+                    <td className="px-4 py-2.5 text-gray-300">…</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* 結果表示 */}
+      {results && (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-50">
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">インポート結果</h3>
+            <div className="flex gap-4">
+              <div className="flex items-center gap-2 bg-emerald-50 text-emerald-700 px-4 py-2 rounded-xl">
+                <CheckCircle2 size={16} />
+                <span className="text-sm font-semibold">成功 {results.successCount}件</span>
+              </div>
+              {results.errorCount > 0 && (
+                <div className="flex items-center gap-2 bg-red-50 text-red-600 px-4 py-2 rounded-xl">
+                  <XCircle size={16} />
+                  <span className="text-sm font-semibold">エラー {results.errorCount}件</span>
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="divide-y divide-gray-50 max-h-72 overflow-y-auto">
+            {results.results.filter(r => r.status === "error").map((r) => (
+              <div key={r.row} className="px-6 py-3 flex items-start gap-3">
+                <AlertCircle size={15} className="text-red-400 mt-0.5 shrink-0" />
+                <div className="text-sm">
+                  <span className="text-gray-500 text-xs">行 {r.row}</span>
+                  {r.customerName && <span className="ml-2 font-medium text-gray-700">{r.customerName}</span>}
+                  <p className="text-red-500 text-xs mt-0.5">{r.message}</p>
+                </div>
+              </div>
+            ))}
+            {results.successCount > 0 && results.errorCount === 0 && (
+              <div className="px-6 py-4 text-sm text-gray-400 text-center">
+                すべてのデータを正常にインポートしました
+              </div>
+            )}
+          </div>
+          {results.successCount > 0 && (
+            <div className="px-6 py-4 border-t border-gray-50">
+              <button onClick={() => { setPreview([]); setFileName(""); setResults(null); }}
+                className="text-sm text-indigo-600 hover:text-indigo-700 font-medium">
+                続けてインポートする
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
