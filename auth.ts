@@ -38,12 +38,22 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.id = user.id;
         token.role = (user as { role: string }).role;
       }
+      // 古いトークンにroleがない場合はDBから取り直す
+      if (!token.role && token.id) {
+        try {
+          const db = sql();
+          const rows = await db`SELECT role FROM users WHERE id = ${token.id as string} LIMIT 1`;
+          if (rows.length) token.role = rows[0].role as string;
+        } catch {
+          // DB接続エラー時は何もしない
+        }
+      }
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.id as string;
-        session.user.role = token.role as string;
+        session.user.role = (token.role as string) ?? "sales";
       }
       return session;
     },
