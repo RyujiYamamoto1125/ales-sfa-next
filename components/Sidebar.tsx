@@ -15,6 +15,7 @@ export default function Sidebar() {
     { href: "/targets", label: "目標設定", icon: "🎯", roles: ["admin"] },
   ].filter((item) => item.roles.includes(role));
 
+
   const roleLabel: Record<string, string> = {
     admin: "管理者",
     sales: "営業",

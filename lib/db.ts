@@ -8,6 +8,7 @@ export function sql() {
 
 export async function initSchema() {
   const db = sql();
+
   await db`
     CREATE TABLE IF NOT EXISTS users (
       id SERIAL PRIMARY KEY,
@@ -18,6 +19,7 @@ export async function initSchema() {
       created_at TIMESTAMP DEFAULT NOW()
     )
   `;
+
   await db`
     CREATE TABLE IF NOT EXISTS cases (
       id SERIAL PRIMARY KEY,
@@ -28,10 +30,13 @@ export async function initSchema() {
       appointer VARCHAR(255),
       notes TEXT,
       contracted_at TIMESTAMP,
+      amount INTEGER DEFAULT 0,
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
     )
   `;
+  await db`ALTER TABLE cases ADD COLUMN IF NOT EXISTS amount INTEGER DEFAULT 0`;
+
   await db`
     CREATE TABLE IF NOT EXISTS targets (
       id SERIAL PRIMARY KEY,
@@ -39,6 +44,28 @@ export async function initSchema() {
       month INTEGER NOT NULL,
       target_count INTEGER DEFAULT 0,
       UNIQUE(year, month)
+    )
+  `;
+
+  await db`
+    CREATE TABLE IF NOT EXISTS sales_targets (
+      id SERIAL PRIMARY KEY,
+      sales_person VARCHAR(255) NOT NULL,
+      year INTEGER NOT NULL,
+      month INTEGER NOT NULL,
+      target_contracts INTEGER DEFAULT 0,
+      target_amount INTEGER DEFAULT 0,
+      UNIQUE(sales_person, year, month)
+    )
+  `;
+
+  await db`
+    CREATE TABLE IF NOT EXISTS leads (
+      id SERIAL PRIMARY KEY,
+      date DATE NOT NULL,
+      medium VARCHAR(100) NOT NULL,
+      lead_count INTEGER DEFAULT 0,
+      UNIQUE(date, medium)
     )
   `;
 }

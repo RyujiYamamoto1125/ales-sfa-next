@@ -33,7 +33,7 @@ interface CaseData {
 
 const EMPTY_FORM = {
   customerName: "", status: "未実行", nextMeeting: "",
-  salesPerson: "", appointer: "", notes: "",
+  salesPerson: "", appointer: "", notes: "", amount: 0,
 };
 
 export default function CasesPage() {
@@ -111,6 +111,7 @@ export default function CasesPage() {
       salesPerson: c.sales_person ?? "",
       appointer: c.appointer ?? "",
       notes: c.notes ?? "",
+      amount: (c as { amount?: number }).amount ?? 0,
     });
   }
 
@@ -245,6 +246,15 @@ export default function CasesPage() {
                               onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
                               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
                           </div>
+
+                          {!isAppointer && (
+                            <div>
+                              <label className="block text-xs font-medium text-gray-600 mb-1">売上金額（円）</label>
+                              <input type="number" min={0} value={editForm.amount}
+                                onChange={(e) => setEditForm({ ...editForm, amount: Number(e.target.value) })}
+                                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
+                            </div>
+                          )}
                         </div>
 
                         <div className="flex gap-2">
@@ -319,6 +329,15 @@ export default function CasesPage() {
                   <label className="block text-xs font-medium text-gray-600 mb-1">備考</label>
                   <textarea value={form.notes} rows={2}
                     onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#26C6DA]" />
+                </div>
+              )}
+
+              {!isAppointer && (
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">売上金額（円）</label>
+                  <input type="number" min={0} value={form.amount}
+                    onChange={(e) => setForm({ ...form, amount: Number(e.target.value) })}
                     className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#26C6DA]" />
                 </div>
               )}

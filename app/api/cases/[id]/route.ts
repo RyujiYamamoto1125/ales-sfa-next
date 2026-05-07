@@ -47,6 +47,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       appointer     = ${body.appointer ?? null},
       notes         = ${body.notes ?? null},
       contracted_at = ${contractedAt},
+      amount        = ${Number(body.amount ?? cur.amount ?? 0)},
       updated_at    = NOW()
     WHERE id = ${id}
     RETURNING *
