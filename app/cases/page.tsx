@@ -8,6 +8,7 @@ import {
   Plus, Filter, Download, ChevronDown, ChevronUp,
   Mail, Phone, User, Calendar, FileCheck, TrendingUp,
   Upload, FileSpreadsheet, CheckCircle2, XCircle, AlertCircle,
+  Trash2,
 } from "lucide-react";
 
 // ── 定数 ─────────────────────────────────────────────
@@ -107,6 +108,8 @@ export default function CasesPage() {
   const [filterSales, setFilterSales]         = useState("");
   const [expandedId, setExpandedId]           = useState<string | null>(null);
   const [saving, setSaving]                   = useState(false);
+  const [selected, setSelected]               = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting]       = useState(false);
 
   // アポインター編集フォーム
   const [apoEdit, setApoEdit] = useState<Record<string, string | number>>({});
@@ -214,11 +217,42 @@ export default function CasesPage() {
     setSaving(false);
   }
 
-  // ── 削除 ──
+  // ── 削除（単体） ──
   async function handleDelete(id: string) {
     if (!confirm("この案件を削除しますか？")) return;
     await fetch(`/api/cases/${id}`, { method: "DELETE" });
     fetchCases();
+  }
+
+  // ── 一括削除 ──
+  async function handleBulkDelete() {
+    if (!selected.size) return;
+    if (!confirm(`選択した ${selected.size} 件を削除しますか？\nこの操作は元に戻せません。`)) return;
+    setBulkDeleting(true);
+    await fetch("/api/cases", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: Array.from(selected) }),
+    });
+    setSelected(new Set());
+    setBulkDeleting(false);
+    fetchCases();
+  }
+
+  function toggleSelect(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (selected.size === filtered.length) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(filtered.map((c) => c.id)));
+    }
   }
 
   // ── 新規登録（アポインター） ──
@@ -310,7 +344,24 @@ export default function CasesPage() {
                 className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" />
             )}
             <div className="flex-1" />
+            {isAdmin && filtered.length > 0 && (
+              <label className="flex items-center gap-2 text-xs text-gray-500 cursor-pointer select-none">
+                <input type="checkbox"
+                  checked={selected.size > 0 && selected.size === filtered.length}
+                  ref={(el) => { if (el) el.indeterminate = selected.size > 0 && selected.size < filtered.length; }}
+                  onChange={toggleSelectAll}
+                  className="w-4 h-4 rounded accent-indigo-600" />
+                全選択
+              </label>
+            )}
             <span className="text-xs font-medium text-gray-400 bg-gray-100 px-3 py-1.5 rounded-full">{filtered.length} 件</span>
+            {isAdmin && selected.size > 0 && (
+              <button onClick={handleBulkDelete} disabled={bulkDeleting}
+                className="flex items-center gap-2 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-xl text-sm font-semibold disabled:opacity-50 transition-colors">
+                <Trash2 size={14} />
+                {bulkDeleting ? "削除中..." : `${selected.size}件を削除`}
+              </button>
+            )}
             {(isAdmin || isSales) && (
               <button onClick={downloadCSV}
                 className="flex items-center gap-2 px-4 py-2 bg-gray-50 hover:bg-gray-100 rounded-xl text-sm font-medium text-gray-600 transition-colors border border-gray-200">
@@ -332,9 +383,17 @@ export default function CasesPage() {
               {filtered.map((c) => (
                 <div key={c.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                   {/* カードヘッダー */}
-                  <div className="flex items-center justify-between px-5 py-4 cursor-pointer hover:bg-gray-50 transition-colors"
-                    onClick={() => toggleExpand(c)}>
-                    <div className="flex items-center gap-3 min-w-0">
+                  <div className="flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors">
+                    {isAdmin && (
+                      <input type="checkbox"
+                        checked={selected.has(c.id)}
+                        onChange={() => toggleSelect(c.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-4 h-4 rounded accent-indigo-600 mr-2 shrink-0 cursor-pointer"
+                      />
+                    )}
+                    <div className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer"
+                      onClick={() => toggleExpand(c)}>
                       <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center shrink-0">
                         <span className="text-indigo-700 font-bold text-sm">{c.customer_name.charAt(0)}</span>
                       </div>
@@ -360,7 +419,7 @@ export default function CasesPage() {
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3 shrink-0">
+                    <div className="flex items-center gap-3 shrink-0 cursor-pointer" onClick={() => toggleExpand(c)}>
                       <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${STATUS_STYLE[c.status] ?? "bg-gray-100 text-gray-600"}`}>
                         {c.status}
                       </span>

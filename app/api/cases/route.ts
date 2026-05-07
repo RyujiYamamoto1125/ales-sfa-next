@@ -53,3 +53,18 @@ export async function POST(req: NextRequest) {
   `;
   return NextResponse.json(rows[0], { status: 201 });
 }
+
+export async function DELETE(req: NextRequest) {
+  const session = await auth();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (session.user.role !== "admin") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const db = sql();
+  const { ids } = await req.json() as { ids: string[] };
+  if (!ids?.length) return NextResponse.json({ error: "ids is required" }, { status: 400 });
+
+  await db`DELETE FROM cases WHERE id = ANY(${ids}::int[])`;
+  return NextResponse.json({ deletedCount: ids.length });
+}
