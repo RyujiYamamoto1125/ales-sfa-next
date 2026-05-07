@@ -260,7 +260,7 @@ export default function CasesPage() {
           <Plus size={15} /> 新規登録
         </button>
       )}
-      {isAdmin && (
+      {(isAdmin || isAppointer) && (
         <button onClick={() => setTab("import")}
           className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-semibold transition-colors">
           <Upload size={15} /> CSVインポート
@@ -283,7 +283,7 @@ export default function CasesPage() {
             新規登録
           </button>
         )}
-        {isAdmin && (
+        {(isAdmin || isAppointer) && (
           <button onClick={() => setTab("import")}
             className={`px-5 py-2 rounded-xl text-sm font-medium transition-all ${tab === "import" ? "bg-emerald-600 text-white shadow-sm" : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"}`}>
             CSVインポート
@@ -519,8 +519,11 @@ export default function CasesPage() {
       )}
 
       {/* ══════ CSVインポート（管理者のみ） ══════ */}
-      {tab === "import" && isAdmin && (
-        <CsvImportPanel onImported={() => { fetchCases(); setTab("list"); }} />
+      {tab === "import" && (isAdmin || isAppointer) && (
+        <CsvImportPanel
+          role={role}
+          onImported={() => { fetchCases(); setTab("list"); }}
+        />
       )}
     </AppLayout>
   );
@@ -830,14 +833,25 @@ function PanelActions({ onSave, onCancel, saving, saveDisabled, onDelete }: {
 }
 
 // ── CSVインポートパネル ──────────────────────────────
-const CSV_HEADERS = [
+
+// アポインター用テンプレート（登録フォームと同じフィールド）
+const APO_CSV_HEADERS = [
+  "流入経路","資料請求日","会社名","役職","ふりがな",
+  "メールアドレス","電話番号","会話メモ","アポ取得者","初回商談日時",
+];
+const APO_CSV_EXAMPLE = [
+  "自社広告（LP）","2026/05/01","株式会社サンプル","代表取締役","かぶしきがいしゃさんぷる",
+  "yamada@sample.com","090-1234-5678","見込みあり。資料送付済み。","荒木","2026/05/07 14:00",
+];
+
+// 管理者用テンプレート（全フィールド）
+const ADMIN_CSV_HEADERS = [
   "流入経路","資料請求日","会社名","役職","ふりがな","担当者名",
-  "メールアドレス","電話番号","会話メモ","アポインター名","初回商談日時",
+  "メールアドレス","電話番号","会話メモ","アポ取得者","初回商談日時",
   "ステータス","営業担当者名",
   "初期費用","月額費用","売上金額","契約書返送日","初回引落日","契約日",
 ];
-
-const CSV_EXAMPLE = [
+const ADMIN_CSV_EXAMPLE = [
   "自社広告（LP）","2026/05/01","株式会社サンプル","代表取締役","かぶしきがいしゃさんぷる","山田 太郎",
   "yamada@sample.com","090-1234-5678","見込みあり。資料送付済み。","荒木","2026/05/07 14:00",
   "契約","隅田",
@@ -848,7 +862,10 @@ interface ImportResult {
   row: number; status: "ok" | "error"; message?: string; customerName?: string;
 }
 
-function CsvImportPanel({ onImported }: { onImported: () => void }) {
+function CsvImportPanel({ role, onImported }: { role: string; onImported: () => void }) {
+  const isApo = role === "appointer";
+  const CSV_HEADERS = isApo ? APO_CSV_HEADERS : ADMIN_CSV_HEADERS;
+  const CSV_EXAMPLE = isApo ? APO_CSV_EXAMPLE : ADMIN_CSV_EXAMPLE;
   const fileRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const [preview, setPreview]   = useState<Record<string, string>[]>([]);
@@ -861,7 +878,7 @@ function CsvImportPanel({ onImported }: { onImported: () => void }) {
     const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = "案件インポートテンプレート.csv";
+    a.download = isApo ? "アポ情報インポートテンプレート.csv" : "案件インポートテンプレート.csv";
     a.click();
   }
 
@@ -919,8 +936,11 @@ function CsvImportPanel({ onImported }: { onImported: () => void }) {
           </button>
         </div>
         <div className="mt-3 text-xs text-gray-400 bg-gray-50 rounded-xl p-3">
-          <span className="font-semibold text-gray-600">ステータスの選択肢：</span>
-          {" 未実行 / 見込み（高）/ 見込み（中）/ 見込み（低）/ NG / 不参加 / 申し込みフォーム返送待ち / 契約"}
+          {isApo ? (
+            <><span className="font-semibold text-gray-600">アポ取得者の選択肢：</span>{" 荒木 / 直申し込み / メルマガ / ウェビナー"}</>
+          ) : (
+            <><span className="font-semibold text-gray-600">ステータスの選択肢：</span>{" 未実行 / 見込み（高）/ 見込み（中）/ 見込み（低）/ NG / 不参加 / 申し込みフォーム返送待ち / 契約"}</>
+          )}
         </div>
       </div>
 
