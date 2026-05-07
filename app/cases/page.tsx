@@ -417,9 +417,9 @@ export default function CasesPage() {
           <h3 className="text-base font-semibold text-gray-700 mb-5">新規案件登録</h3>
           <form onSubmit={handleAdd} className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
-            {/* 1. 流入経路 */}
-            <Field label="流入経路">
-              <select value={addForm.leadSource}
+            {/* 1. 流入経路（必須） */}
+            <Field label={<>流入経路 <span className="text-red-400">*</span></>}>
+              <select required value={addForm.leadSource}
                 onChange={(e) => setAddForm({ ...addForm, leadSource: e.target.value })}
                 className={inputCls}>
                 <option value="">選択してください</option>
@@ -427,9 +427,9 @@ export default function CasesPage() {
               </select>
             </Field>
 
-            {/* 2. 資料請求日 */}
-            <Field label="資料請求日">
-              <input type="date" value={addForm.documentRequestDate}
+            {/* 2. 資料請求日（必須） */}
+            <Field label={<>資料請求日 <span className="text-red-400">*</span></>}>
+              <input required type="date" value={addForm.documentRequestDate}
                 onChange={(e) => setAddForm({ ...addForm, documentRequestDate: e.target.value })}
                 className={inputCls} />
             </Field>
@@ -445,31 +445,31 @@ export default function CasesPage() {
             <Field label="役職">
               <input value={addForm.position}
                 onChange={(e) => setAddForm({ ...addForm, position: e.target.value })}
-                placeholder="代表取締役、営業部長 など" className={inputCls} />
+                placeholder="代表取締役、営業部長 など（任意）" className={inputCls} />
             </Field>
 
             {/* 5. ふりがな（任意） */}
             <Field label="ふりがな">
               <input value={addForm.furigana}
                 onChange={(e) => setAddForm({ ...addForm, furigana: e.target.value })}
-                placeholder="かぶしきがいしゃ〇〇" className={inputCls} />
+                placeholder="かぶしきがいしゃ〇〇（任意）" className={inputCls} />
             </Field>
 
-            {/* 6. メールアドレス */}
-            <Field label="メールアドレス">
+            {/* 6. メールアドレス（必須） */}
+            <Field label={<>メールアドレス <span className="text-red-400">*</span></>}>
               <div className="relative">
                 <Mail size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input type="email" value={addForm.emailAddress}
+                <input required type="email" value={addForm.emailAddress}
                   onChange={(e) => setAddForm({ ...addForm, emailAddress: e.target.value })}
                   placeholder="example@company.com" className={`${inputCls} pl-8`} />
               </div>
             </Field>
 
-            {/* 7. 電話番号 */}
-            <Field label="電話番号">
+            {/* 7. 電話番号（必須） */}
+            <Field label={<>電話番号 <span className="text-red-400">*</span></>}>
               <div className="relative">
                 <Phone size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input type="tel" value={addForm.phone}
+                <input required type="tel" value={addForm.phone}
                   onChange={(e) => setAddForm({ ...addForm, phone: e.target.value })}
                   placeholder="090-1234-5678" className={`${inputCls} pl-8`} />
               </div>
@@ -485,20 +485,20 @@ export default function CasesPage() {
               </Field>
             </div>
 
-            {/* 9. アポ取得者 */}
-            <Field label="アポ取得者">
-              <select value={addForm.appointer}
+            {/* 9. アポ取得者（必須・常に値あり） */}
+            <Field label={<>アポ取得者 <span className="text-red-400">*</span></>}>
+              <select required value={addForm.appointer}
                 onChange={(e) => setAddForm({ ...addForm, appointer: e.target.value })}
                 className={inputCls}>
                 {APPOINTER_OPTIONS.map((a) => <option key={a}>{a}</option>)}
               </select>
             </Field>
 
-            {/* 10. 初回商談日時 */}
-            <Field label="初回商談日時">
+            {/* 10. 初回商談日時（必須） */}
+            <Field label={<>初回商談日時 <span className="text-red-400">*</span></>}>
               <div className="relative">
                 <Calendar size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input type="datetime-local" value={addForm.nextMeeting}
+                <input required type="datetime-local" value={addForm.nextMeeting}
                   onChange={(e) => setAddForm({ ...addForm, nextMeeting: e.target.value })}
                   className={`${inputCls} pl-8`} />
               </div>
