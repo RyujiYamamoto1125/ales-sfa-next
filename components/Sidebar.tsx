@@ -4,12 +4,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
 import {
-  LayoutDashboard, ClipboardList, Target, LogOut,
+  LayoutDashboard, ClipboardList, Target, LogOut, Megaphone,
 } from "lucide-react";
 
 const NAV = [
   { href: "/dashboard", label: "ダッシュボード", icon: LayoutDashboard, roles: ["admin","sales","appointer"] },
   { href: "/cases",     label: "案件管理",       icon: ClipboardList,   roles: ["admin","sales","appointer"] },
+  { href: "/ads",       label: "広告数値管理",   icon: Megaphone,       roles: ["admin","sales"] },
   { href: "/targets",   label: "目標設定",        icon: Target,          roles: ["admin"] },
 ];
 

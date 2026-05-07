@@ -78,4 +78,20 @@ export async function initSchema() {
       UNIQUE(date, medium)
     )
   `;
+
+  await db`
+    CREATE TABLE IF NOT EXISTS ad_metrics (
+      id SERIAL PRIMARY KEY,
+      date DATE NOT NULL,
+      medium VARCHAR(100) NOT NULL,
+      ad_spend BIGINT DEFAULT 0,
+      dashboard_cv INTEGER DEFAULT 0,
+      actual_cv INTEGER DEFAULT 0,
+      clicks INTEGER DEFAULT 0,
+      impressions INTEGER DEFAULT 0,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW(),
+      UNIQUE(date, medium)
+    )
+  `;
 }
