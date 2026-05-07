@@ -28,19 +28,24 @@ export async function POST(req: NextRequest) {
 
   const rows = await db`
     INSERT INTO cases (
-      customer_name, contact_person, email_address, phone,
-      status, next_meeting, appointer, lead_source, notes
+      lead_source, document_request_date,
+      customer_name, position, furigana,
+      email_address, phone, notes,
+      appointer, next_meeting,
+      status
     )
     VALUES (
+      ${body.leadSource ?? null},
+      ${body.documentRequestDate ? new Date(body.documentRequestDate) : null},
       ${body.customerName},
-      ${body.contactPerson ?? null},
+      ${body.position ?? null},
+      ${body.furigana ?? null},
       ${body.emailAddress ?? null},
       ${body.phone ?? null},
-      '未実行',
-      ${body.nextMeeting ? new Date(body.nextMeeting) : null},
+      ${body.notes ?? null},
       ${body.appointer ?? null},
-      ${body.leadSource ?? null},
-      ${body.notes ?? null}
+      ${body.nextMeeting ? new Date(body.nextMeeting) : null},
+      '未実行'
     )
     RETURNING *
   `;

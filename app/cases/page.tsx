@@ -50,16 +50,19 @@ const LEAD_SOURCE_OPTIONS = [
 // ── 型 ─────────────────────────────────────────────
 interface CaseData {
   id: string;
+  lead_source?: string;
+  document_request_date?: string;
   customer_name: string;
+  position?: string;
+  furigana?: string;
   contact_person?: string;
   email_address?: string;
   phone?: string;
-  status: string;
-  next_meeting?: string;
-  sales_person?: string;
-  appointer?: string;
-  lead_source?: string;
   notes?: string;
+  appointer?: string;
+  next_meeting?: string;
+  status: string;
+  sales_person?: string;
   initial_fee?: number;
   monthly_fee?: number;
   contract_return_date?: string;
@@ -70,8 +73,10 @@ interface CaseData {
 
 // ── フォーム初期値 ─────────────────────────────────
 const EMPTY_ADD = {
-  customerName: "", contactPerson: "", emailAddress: "",
-  phone: "", appointer: "荒木", leadSource: "", nextMeeting: "", notes: "",
+  leadSource: "", documentRequestDate: "",
+  customerName: "", position: "", furigana: "",
+  emailAddress: "", phone: "", notes: "",
+  appointer: "荒木", nextMeeting: "",
 };
 
 // ── スタイル ───────────────────────────────────────
@@ -131,14 +136,16 @@ export default function CasesPage() {
 
     if (isAppointer) {
       setApoEdit({
-        customerName:  c.customer_name,
-        contactPerson: c.contact_person  ?? "",
-        emailAddress:  c.email_address   ?? "",
-        phone:         c.phone           ?? "",
-        appointer:     c.appointer       ?? APPOINTER_OPTIONS[0],
-        leadSource:    c.lead_source     ?? "",
-        nextMeeting:   c.next_meeting ? new Date(c.next_meeting).toISOString().slice(0, 16) : "",
-        notes:         c.notes           ?? "",
+        leadSource:           c.lead_source    ?? "",
+        documentRequestDate:  c.document_request_date ? c.document_request_date.slice(0, 10) : "",
+        customerName:         c.customer_name,
+        position:             c.position       ?? "",
+        furigana:             c.furigana       ?? "",
+        emailAddress:         c.email_address  ?? "",
+        phone:                c.phone          ?? "",
+        notes:                c.notes          ?? "",
+        appointer:            c.appointer      ?? APPOINTER_OPTIONS[0],
+        nextMeeting:          c.next_meeting ? new Date(c.next_meeting).toISOString().slice(0, 16) : "",
       });
     }
     if (isSales) {
@@ -159,16 +166,19 @@ export default function CasesPage() {
     }
     if (isAdmin) {
       setAdminEdit({
-        customerName:        c.customer_name,
-        contactPerson:       c.contact_person  ?? "",
-        emailAddress:        c.email_address   ?? "",
-        phone:               c.phone           ?? "",
-        status:              c.status,
-        nextMeeting:         c.next_meeting ? new Date(c.next_meeting).toISOString().slice(0, 16) : "",
-        salesPerson:         c.sales_person   ?? "",
-        appointer:           c.appointer      ?? "",
         leadSource:          c.lead_source    ?? "",
+        documentRequestDate: c.document_request_date ? c.document_request_date.slice(0, 10) : "",
+        customerName:        c.customer_name,
+        position:            c.position       ?? "",
+        furigana:            c.furigana       ?? "",
+        contactPerson:       c.contact_person ?? "",
+        emailAddress:        c.email_address  ?? "",
+        phone:               c.phone          ?? "",
         notes:               c.notes          ?? "",
+        appointer:           c.appointer      ?? "",
+        nextMeeting:         c.next_meeting ? new Date(c.next_meeting).toISOString().slice(0, 16) : "",
+        status:              c.status,
+        salesPerson:         c.sales_person   ?? "",
         initialFee:          c.initial_fee    ?? 0,
         monthlyFee:          c.monthly_fee    ?? 0,
         contractReturnDate:  c.contract_return_date ? c.contract_return_date.slice(0, 10) : "",
@@ -406,42 +416,8 @@ export default function CasesPage() {
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 max-w-2xl">
           <h3 className="text-base font-semibold text-gray-700 mb-5">新規案件登録</h3>
           <form onSubmit={handleAdd} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Field label={<>顧客名 <span className="text-red-400">*</span></>}>
-              <input required value={addForm.customerName}
-                onChange={(e) => setAddForm({ ...addForm, customerName: e.target.value })}
-                placeholder="株式会社〇〇" className={inputCls} />
-            </Field>
-            <Field label="担当者名">
-              <div className="relative">
-                <User size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input value={addForm.contactPerson}
-                  onChange={(e) => setAddForm({ ...addForm, contactPerson: e.target.value })}
-                  placeholder="山田 太郎" className={`${inputCls} pl-8`} />
-              </div>
-            </Field>
-            <Field label="メールアドレス">
-              <div className="relative">
-                <Mail size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input type="email" value={addForm.emailAddress}
-                  onChange={(e) => setAddForm({ ...addForm, emailAddress: e.target.value })}
-                  placeholder="example@company.com" className={`${inputCls} pl-8`} />
-              </div>
-            </Field>
-            <Field label="電話番号">
-              <div className="relative">
-                <Phone size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input type="tel" value={addForm.phone}
-                  onChange={(e) => setAddForm({ ...addForm, phone: e.target.value })}
-                  placeholder="090-1234-5678" className={`${inputCls} pl-8`} />
-              </div>
-            </Field>
-            <Field label="アポインター名">
-              <select value={addForm.appointer}
-                onChange={(e) => setAddForm({ ...addForm, appointer: e.target.value })}
-                className={inputCls}>
-                {APPOINTER_OPTIONS.map((a) => <option key={a}>{a}</option>)}
-              </select>
-            </Field>
+
+            {/* 1. 流入経路 */}
             <Field label="流入経路">
               <select value={addForm.leadSource}
                 onChange={(e) => setAddForm({ ...addForm, leadSource: e.target.value })}
@@ -450,7 +426,76 @@ export default function CasesPage() {
                 {LEAD_SOURCE_OPTIONS.map((s) => <option key={s}>{s}</option>)}
               </select>
             </Field>
-            <Field label="商談日時">
+
+            {/* 2. 資料請求日 */}
+            <Field label="資料請求日">
+              <input type="date" value={addForm.documentRequestDate}
+                onChange={(e) => setAddForm({ ...addForm, documentRequestDate: e.target.value })}
+                className={inputCls} />
+            </Field>
+
+            {/* 3. 会社名（必須） */}
+            <Field label={<>会社名 <span className="text-red-400">*</span></>}>
+              <input required value={addForm.customerName}
+                onChange={(e) => setAddForm({ ...addForm, customerName: e.target.value })}
+                placeholder="株式会社〇〇" className={inputCls} />
+            </Field>
+
+            {/* 4. 役職（任意） */}
+            <Field label="役職">
+              <input value={addForm.position}
+                onChange={(e) => setAddForm({ ...addForm, position: e.target.value })}
+                placeholder="代表取締役、営業部長 など" className={inputCls} />
+            </Field>
+
+            {/* 5. ふりがな（任意） */}
+            <Field label="ふりがな">
+              <input value={addForm.furigana}
+                onChange={(e) => setAddForm({ ...addForm, furigana: e.target.value })}
+                placeholder="かぶしきがいしゃ〇〇" className={inputCls} />
+            </Field>
+
+            {/* 6. メールアドレス */}
+            <Field label="メールアドレス">
+              <div className="relative">
+                <Mail size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input type="email" value={addForm.emailAddress}
+                  onChange={(e) => setAddForm({ ...addForm, emailAddress: e.target.value })}
+                  placeholder="example@company.com" className={`${inputCls} pl-8`} />
+              </div>
+            </Field>
+
+            {/* 7. 電話番号 */}
+            <Field label="電話番号">
+              <div className="relative">
+                <Phone size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input type="tel" value={addForm.phone}
+                  onChange={(e) => setAddForm({ ...addForm, phone: e.target.value })}
+                  placeholder="090-1234-5678" className={`${inputCls} pl-8`} />
+              </div>
+            </Field>
+
+            {/* 8. 会話メモ（任意・全幅） */}
+            <div className="md:col-span-2">
+              <Field label="会話メモ">
+                <textarea value={addForm.notes} rows={3}
+                  onChange={(e) => setAddForm({ ...addForm, notes: e.target.value })}
+                  placeholder="商談内容・顧客の状況・ポイントなど（任意）"
+                  className={`${inputCls} resize-none`} />
+              </Field>
+            </div>
+
+            {/* 9. アポ取得者 */}
+            <Field label="アポ取得者">
+              <select value={addForm.appointer}
+                onChange={(e) => setAddForm({ ...addForm, appointer: e.target.value })}
+                className={inputCls}>
+                {APPOINTER_OPTIONS.map((a) => <option key={a}>{a}</option>)}
+              </select>
+            </Field>
+
+            {/* 10. 初回商談日時 */}
+            <Field label="初回商談日時">
               <div className="relative">
                 <Calendar size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input type="datetime-local" value={addForm.nextMeeting}
@@ -458,15 +503,8 @@ export default function CasesPage() {
                   className={`${inputCls} pl-8`} />
               </div>
             </Field>
-            <div className="md:col-span-2">
-              <Field label="会話メモ">
-                <textarea value={addForm.notes} rows={4}
-                  onChange={(e) => setAddForm({ ...addForm, notes: e.target.value })}
-                  placeholder="商談内容・顧客の状況・ポイントなど"
-                  className={`${inputCls} resize-none`} />
-              </Field>
-            </div>
-            <div className="md:col-span-2 flex gap-3">
+
+            <div className="md:col-span-2 flex gap-3 pt-2">
               <button type="submit" disabled={saving}
                 className="px-8 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors">
                 {saving ? "登録中..." : "登録する"}
@@ -495,9 +533,11 @@ interface SalesForm {
   contractReturnDate: string; firstDeductionDate: string;
 }
 interface AdminForm {
-  customerName: string; contactPerson: string; emailAddress: string; phone: string;
-  status: string; nextMeeting: string; salesPerson: string; appointer: string;
-  leadSource: string; notes: string;
+  leadSource: string; documentRequestDate: string;
+  customerName: string; position: string; furigana: string; contactPerson: string;
+  emailAddress: string; phone: string; notes: string;
+  appointer: string; nextMeeting: string;
+  status: string; salesPerson: string;
   initialFee: number; monthlyFee: number; contractReturnDate: string; firstDeductionDate: string;
 }
 
@@ -522,14 +562,23 @@ function ApoPanel({ form, onChange, onSave, onCancel, saving }: {
     <div className="border-t border-gray-100 px-5 py-5 bg-gray-50">
       <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-4">アポ情報を編集</p>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-        <Field label="顧客名">
+        <Field label="流入経路">
+          <select value={form.leadSource ?? ""} onChange={(e) => onChange("leadSource", e.target.value)} className={inputCls}>
+            <option value="">選択してください</option>
+            {LEAD_SOURCE_OPTIONS.map((s) => <option key={s}>{s}</option>)}
+          </select>
+        </Field>
+        <Field label="資料請求日">
+          <input type="date" value={form.documentRequestDate ?? ""} onChange={(e) => onChange("documentRequestDate", e.target.value)} className={inputCls} />
+        </Field>
+        <Field label="会社名">
           <input value={form.customerName ?? ""} onChange={(e) => onChange("customerName", e.target.value)} className={inputCls} />
         </Field>
-        <Field label="担当者名">
-          <div className="relative">
-            <User size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input value={form.contactPerson ?? ""} onChange={(e) => onChange("contactPerson", e.target.value)} className={`${inputCls} pl-8`} />
-          </div>
+        <Field label="役職">
+          <input value={form.position ?? ""} onChange={(e) => onChange("position", e.target.value)} placeholder="代表取締役 など" className={inputCls} />
+        </Field>
+        <Field label="ふりがな">
+          <input value={form.furigana ?? ""} onChange={(e) => onChange("furigana", e.target.value)} placeholder="かぶしきがいしゃ〇〇" className={inputCls} />
         </Field>
         <Field label="メールアドレス">
           <div className="relative">
@@ -543,28 +592,22 @@ function ApoPanel({ form, onChange, onSave, onCancel, saving }: {
             <input type="tel" value={form.phone ?? ""} onChange={(e) => onChange("phone", e.target.value)} className={`${inputCls} pl-8`} />
           </div>
         </Field>
-        <Field label="アポインター名">
-          <select value={form.appointer ?? APPOINTER_OPTIONS[0]} onChange={(e) => onChange("appointer", e.target.value)} className={inputCls}>
-            {APPOINTER_OPTIONS.map((a) => <option key={a}>{a}</option>)}
-          </select>
-        </Field>
-        <Field label="流入経路">
-          <select value={form.leadSource ?? ""} onChange={(e) => onChange("leadSource", e.target.value)} className={inputCls}>
-            <option value="">選択してください</option>
-            {LEAD_SOURCE_OPTIONS.map((s) => <option key={s}>{s}</option>)}
-          </select>
-        </Field>
-        <Field label="商談日時">
-          <div className="relative">
-            <Calendar size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input type="datetime-local" value={form.nextMeeting ?? ""} onChange={(e) => onChange("nextMeeting", e.target.value)} className={`${inputCls} pl-8`} />
-          </div>
-        </Field>
         <div className="md:col-span-2 lg:col-span-3">
           <Field label="会話メモ">
             <textarea value={form.notes ?? ""} rows={3} onChange={(e) => onChange("notes", e.target.value)} className={`${inputCls} resize-none`} />
           </Field>
         </div>
+        <Field label="アポ取得者">
+          <select value={form.appointer ?? APPOINTER_OPTIONS[0]} onChange={(e) => onChange("appointer", e.target.value)} className={inputCls}>
+            {APPOINTER_OPTIONS.map((a) => <option key={a}>{a}</option>)}
+          </select>
+        </Field>
+        <Field label="初回商談日時">
+          <div className="relative">
+            <Calendar size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input type="datetime-local" value={form.nextMeeting ?? ""} onChange={(e) => onChange("nextMeeting", e.target.value)} className={`${inputCls} pl-8`} />
+          </div>
+        </Field>
       </div>
       <PanelActions onSave={onSave} onCancel={onCancel} saving={saving} />
     </div>
@@ -585,12 +628,15 @@ function SalesPanel({ caseData, form, onChange, onSave, onCancel, saving }: {
       <div className="bg-white rounded-xl p-4 border border-gray-100 mb-5">
         <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">顧客情報（アポインター入力済み）</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-          <InfoItem label="顧客名"   value={caseData.customer_name} />
-          <InfoItem label="担当者名" value={caseData.contact_person} />
-          <InfoItem label="メール"   value={caseData.email_address} icon={<Mail size={12} className="text-gray-400" />} />
-          <InfoItem label="電話"     value={caseData.phone}         icon={<Phone size={12} className="text-gray-400" />} />
-          <InfoItem label="アポインター" value={caseData.appointer} />
-          <InfoItem label="商談日時" value={caseData.next_meeting ? new Date(caseData.next_meeting).toLocaleString("ja-JP") : ""} />
+          <InfoItem label="流入経路"   value={caseData.lead_source} />
+          <InfoItem label="資料請求日" value={caseData.document_request_date ? caseData.document_request_date.slice(0,10) : ""} />
+          <InfoItem label="会社名"     value={caseData.customer_name} />
+          <InfoItem label="役職"       value={caseData.position} />
+          <InfoItem label="ふりがな"   value={caseData.furigana} />
+          <InfoItem label="メール"     value={caseData.email_address} icon={<Mail size={12} className="text-gray-400" />} />
+          <InfoItem label="電話"       value={caseData.phone} icon={<Phone size={12} className="text-gray-400" />} />
+          <InfoItem label="アポ取得者" value={caseData.appointer} />
+          <InfoItem label="初回商談日時" value={caseData.next_meeting ? new Date(caseData.next_meeting).toLocaleString("ja-JP") : ""} />
         </div>
         {caseData.notes && (
           <div className="mt-3 pt-3 border-t border-gray-100">
@@ -677,8 +723,23 @@ function AdminPanel({ form, onChange, onSave, onDelete, onCancel, saving }: {
     <div className="border-t border-gray-100 px-5 py-5 bg-gray-50">
       <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-4">全フィールド編集（管理者）</p>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-        <Field label="顧客名">
+        <Field label="流入経路">
+          <select value={form.leadSource} onChange={(e) => onChange("leadSource", e.target.value)} className={inputCls}>
+            <option value="">選択してください</option>
+            {LEAD_SOURCE_OPTIONS.map((s) => <option key={s}>{s}</option>)}
+          </select>
+        </Field>
+        <Field label="資料請求日">
+          <input type="date" value={form.documentRequestDate} onChange={(e) => onChange("documentRequestDate", e.target.value)} className={inputCls} />
+        </Field>
+        <Field label="会社名">
           <input value={form.customerName} onChange={(e) => onChange("customerName", e.target.value)} className={inputCls} />
+        </Field>
+        <Field label="役職">
+          <input value={form.position} onChange={(e) => onChange("position", e.target.value)} className={inputCls} />
+        </Field>
+        <Field label="ふりがな">
+          <input value={form.furigana} onChange={(e) => onChange("furigana", e.target.value)} className={inputCls} />
         </Field>
         <Field label="担当者名">
           <input value={form.contactPerson} onChange={(e) => onChange("contactPerson", e.target.value)} className={inputCls} />
@@ -689,18 +750,17 @@ function AdminPanel({ form, onChange, onSave, onDelete, onCancel, saving }: {
         <Field label="電話番号">
           <input type="tel" value={form.phone} onChange={(e) => onChange("phone", e.target.value)} className={inputCls} />
         </Field>
-        <Field label="アポインター名">
+        <div className="md:col-span-2 lg:col-span-3">
+          <Field label="会話メモ">
+            <textarea value={form.notes} rows={3} onChange={(e) => onChange("notes", e.target.value)} className={`${inputCls} resize-none`} />
+          </Field>
+        </div>
+        <Field label="アポ取得者">
           <select value={form.appointer} onChange={(e) => onChange("appointer", e.target.value)} className={inputCls}>
             {APPOINTER_OPTIONS.map((a) => <option key={a}>{a}</option>)}
           </select>
         </Field>
-        <Field label="流入経路">
-          <select value={form.leadSource} onChange={(e) => onChange("leadSource", e.target.value)} className={inputCls}>
-            <option value="">選択してください</option>
-            {LEAD_SOURCE_OPTIONS.map((s) => <option key={s}>{s}</option>)}
-          </select>
-        </Field>
-        <Field label="商談日時">
+        <Field label="初回商談日時">
           <input type="datetime-local" value={form.nextMeeting} onChange={(e) => onChange("nextMeeting", e.target.value)} className={inputCls} />
         </Field>
         <Field label="ステータス">
@@ -711,11 +771,6 @@ function AdminPanel({ form, onChange, onSave, onDelete, onCancel, saving }: {
         <Field label="営業担当者名">
           <input value={form.salesPerson} onChange={(e) => onChange("salesPerson", e.target.value)} className={inputCls} />
         </Field>
-        <div className="md:col-span-2 lg:col-span-3">
-          <Field label="会話メモ">
-            <textarea value={form.notes} rows={3} onChange={(e) => onChange("notes", e.target.value)} className={`${inputCls} resize-none`} />
-          </Field>
-        </div>
         {isContract && (
           <>
             <Field label="初期費用（円）">
@@ -776,14 +831,16 @@ function PanelActions({ onSave, onCancel, saving, saveDisabled, onDelete }: {
 
 // ── CSVインポートパネル ──────────────────────────────
 const CSV_HEADERS = [
-  "顧客名","担当者名","メールアドレス","電話番号","ステータス",
-  "商談日時","営業担当者名","アポインター名","流入経路","会話メモ",
+  "流入経路","資料請求日","会社名","役職","ふりがな","担当者名",
+  "メールアドレス","電話番号","会話メモ","アポインター名","初回商談日時",
+  "ステータス","営業担当者名",
   "初期費用","月額費用","売上金額","契約書返送日","初回引落日","契約日",
 ];
 
 const CSV_EXAMPLE = [
-  "株式会社サンプル","山田 太郎","yamada@sample.com","090-1234-5678","契約",
-  "2026/05/01 14:00","隅田","荒木","自社広告（LP）","見込みあり。資料送付済み。",
+  "自社広告（LP）","2026/05/01","株式会社サンプル","代表取締役","かぶしきがいしゃさんぷる","山田 太郎",
+  "yamada@sample.com","090-1234-5678","見込みあり。資料送付済み。","荒木","2026/05/07 14:00",
+  "契約","隅田",
   "100000","30000","","2026/05/10","2026/06/01","2026/05/07",
 ];
 

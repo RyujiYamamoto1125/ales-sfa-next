@@ -21,15 +21,17 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   if (role === "appointer") {
     const rows = await db`
       UPDATE cases SET
-        customer_name  = ${body.customerName  ?? cur.customer_name},
-        contact_person = ${body.contactPerson ?? cur.contact_person},
-        email_address  = ${body.emailAddress  ?? cur.email_address},
-        phone          = ${body.phone         ?? cur.phone},
-        appointer      = ${body.appointer     ?? cur.appointer},
-        lead_source    = ${body.leadSource    ?? cur.lead_source},
-        next_meeting   = ${body.nextMeeting ? new Date(body.nextMeeting) : cur.next_meeting},
-        notes          = ${body.notes         ?? cur.notes},
-        updated_at     = NOW()
+        lead_source            = ${body.leadSource    ?? cur.lead_source},
+        document_request_date  = ${body.documentRequestDate ? new Date(body.documentRequestDate) : cur.document_request_date},
+        customer_name          = ${body.customerName  ?? cur.customer_name},
+        position               = ${body.position      ?? cur.position},
+        furigana               = ${body.furigana      ?? cur.furigana},
+        email_address          = ${body.emailAddress  ?? cur.email_address},
+        phone                  = ${body.phone         ?? cur.phone},
+        notes                  = ${body.notes         ?? cur.notes},
+        appointer              = ${body.appointer     ?? cur.appointer},
+        next_meeting           = ${body.nextMeeting ? new Date(body.nextMeeting) : cur.next_meeting},
+        updated_at             = NOW()
       WHERE id = ${id}
       RETURNING *
     `;
@@ -67,16 +69,19 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const rows = await db`
     UPDATE cases SET
-      customer_name        = ${body.customerName  ?? cur.customer_name},
-      contact_person       = ${body.contactPerson ?? cur.contact_person},
-      email_address        = ${body.emailAddress  ?? cur.email_address},
-      phone                = ${body.phone         ?? cur.phone},
-      status               = ${body.status        ?? cur.status},
-      next_meeting         = ${nextMeeting},
-      sales_person         = ${body.salesPerson   ?? null},
-      appointer            = ${body.appointer     ?? cur.appointer},
-      lead_source          = ${body.leadSource    ?? cur.lead_source},
-      notes                = ${body.notes         ?? null},
+      lead_source            = ${body.leadSource           ?? cur.lead_source},
+      document_request_date  = ${body.documentRequestDate ? new Date(body.documentRequestDate) : cur.document_request_date},
+      customer_name          = ${body.customerName         ?? cur.customer_name},
+      position               = ${body.position             ?? cur.position},
+      furigana               = ${body.furigana             ?? cur.furigana},
+      contact_person         = ${body.contactPerson        ?? cur.contact_person},
+      email_address          = ${body.emailAddress         ?? cur.email_address},
+      phone                  = ${body.phone                ?? cur.phone},
+      notes                  = ${body.notes                ?? null},
+      appointer              = ${body.appointer            ?? cur.appointer},
+      status                 = ${body.status               ?? cur.status},
+      next_meeting           = ${nextMeeting},
+      sales_person           = ${body.salesPerson          ?? null},
       contracted_at        = ${contractedAt},
       initial_fee          = ${Number(body.initialFee ?? cur.initial_fee ?? 0)},
       monthly_fee          = ${Number(body.monthlyFee ?? cur.monthly_fee ?? 0)},
