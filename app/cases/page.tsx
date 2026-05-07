@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
-import Sidebar from "@/components/Sidebar";
+import AppLayout from "@/components/AppLayout";
+import { Plus, Filter, Download } from "lucide-react";
 
 const STATUS_OPTIONS = [
   "未実行", "見込み（高）", "見込み（中）", "見込み（低）",
@@ -132,17 +133,20 @@ export default function CasesPage() {
     a.click();
   }
 
-  return (
-    <div className="flex h-screen overflow-hidden">
-      <Sidebar />
-      <main className="flex-1 overflow-y-auto p-8">
-        <h2 className="text-2xl font-bold text-gray-800 mb-6">案件管理</h2>
+  const headerActions = (
+    <button onClick={() => setTab("add")}
+      className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold transition-colors">
+      <Plus size={15} />新規登録
+    </button>
+  );
 
-        <div className="flex gap-2 mb-6">
+  return (
+    <AppLayout title="案件管理" actions={headerActions}>
+        <div className="flex gap-1 bg-white rounded-2xl p-1.5 w-fit mb-6 shadow-sm border border-gray-100">
           {(["list", "add"] as const).map((t) => (
             <button key={t} onClick={() => setTab(t)}
-              className={`px-5 py-2 rounded-lg text-sm font-medium transition-colors ${
-                tab === t ? "bg-[#26C6DA] text-white" : "bg-white text-gray-600 border border-gray-200 hover:bg-gray-50"
+              className={`px-5 py-2 rounded-xl text-sm font-medium transition-all ${
+                tab === t ? "bg-indigo-600 text-white shadow-sm" : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
               }`}>
               {t === "list" ? "案件一覧" : "新規登録"}
             </button>
@@ -151,24 +155,25 @@ export default function CasesPage() {
 
         {tab === "list" && (
           <>
-            <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 mb-4 flex flex-wrap gap-3">
+            <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 mb-4 flex flex-wrap gap-3 items-center">
+              <Filter size={15} className="text-gray-400" />
               <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}
-                className="border border-gray-200 rounded-lg px-3 py-2 text-sm">
+                className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300">
                 <option value="すべて">すべてのステータス</option>
                 {STATUS_OPTIONS.map((s) => <option key={s}>{s}</option>)}
               </select>
               <input placeholder="アポインター名で絞り込み" value={filterAppointer}
                 onChange={(e) => setFilterAppointer(e.target.value)}
-                className="border border-gray-200 rounded-lg px-3 py-2 text-sm" />
+                className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" />
               <input placeholder="営業担当者名で絞り込み" value={filterSales}
                 onChange={(e) => setFilterSales(e.target.value)}
-                className="border border-gray-200 rounded-lg px-3 py-2 text-sm" />
+                className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" />
               <div className="flex-1" />
-              <span className="text-sm text-gray-400 self-center">{filtered.length} 件</span>
+              <span className="text-xs font-medium text-gray-400 bg-gray-100 px-3 py-1.5 rounded-full">{filtered.length} 件</span>
               {(isAdmin || isSales) && (
                 <button onClick={downloadCSV}
-                  className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors">
-                  CSVダウンロード
+                  className="flex items-center gap-2 px-4 py-2 bg-gray-50 hover:bg-gray-100 rounded-xl text-sm font-medium text-gray-600 transition-colors border border-gray-200">
+                  <Download size={14} />CSV
                 </button>
               )}
             </div>
@@ -180,19 +185,26 @@ export default function CasesPage() {
             ) : (
               <div className="space-y-3">
                 {filtered.map((c) => (
-                  <div key={c.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                    <div className="flex items-center justify-between px-5 py-4 cursor-pointer hover:bg-gray-50"
+                  <div key={c.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                    <div className="flex items-center justify-between px-5 py-4 cursor-pointer hover:bg-gray-50 transition-colors"
                       onClick={() => setEditId(editId === c.id ? null : c.id)}>
-                      <div className="flex items-center gap-4">
-                        <span className="font-semibold text-gray-800">{c.customer_name}</span>
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center shrink-0">
+                          <span className="text-indigo-700 font-bold text-sm">{c.customer_name.charAt(0)}</span>
+                        </div>
+                        <div>
+                          <p className="font-semibold text-gray-800 text-sm">{c.customer_name}</p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            {c.sales_person && <span className="text-xs text-gray-400">営業: {c.sales_person}</span>}
+                            {c.appointer && <span className="text-xs text-gray-400">アポ: {c.appointer}</span>}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
                         <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${STATUS_COLORS[c.status] ?? "bg-gray-100 text-gray-600"}`}>
                           {c.status}
                         </span>
-                      </div>
-                      <div className="flex items-center gap-4 text-sm text-gray-500">
-                        {c.sales_person && <span>営業: {c.sales_person}</span>}
-                        {c.appointer && <span>アポ: {c.appointer}</span>}
-                        <span className="text-gray-300">{editId === c.id ? "▲" : "▼"}</span>
+                        <span className="text-gray-300 text-xs">{editId === c.id ? "▲" : "▼"}</span>
                       </div>
                     </div>
 
@@ -351,7 +363,6 @@ export default function CasesPage() {
             </form>
           </div>
         )}
-      </main>
-    </div>
+    </AppLayout>
   );
 }

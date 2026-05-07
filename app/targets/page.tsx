@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Sidebar from "@/components/Sidebar";
+import AppLayout from "@/components/AppLayout";
 
 interface TargetData { year: number; month: number; target_count: number; }
 interface SalesTarget {
@@ -67,10 +67,7 @@ export default function TargetsPage() {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden">
-      <Sidebar />
-      <main className="flex-1 overflow-y-auto p-8">
-        <h2 className="text-2xl font-bold text-gray-800 mb-6">目標設定</h2>
+    <AppLayout title="目標設定">
 
         {/* 年月選択 */}
         <div className="flex gap-3 mb-6">
@@ -189,7 +186,6 @@ export default function TargetsPage() {
             </table>
           )}
         </div>
-      </main>
-    </div>
+    </AppLayout>
   );
 }
