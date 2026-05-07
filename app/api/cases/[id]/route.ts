@@ -26,6 +26,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         email_address  = ${body.emailAddress  ?? cur.email_address},
         phone          = ${body.phone         ?? cur.phone},
         appointer      = ${body.appointer     ?? cur.appointer},
+        lead_source    = ${body.leadSource    ?? cur.lead_source},
         next_meeting   = ${body.nextMeeting ? new Date(body.nextMeeting) : cur.next_meeting},
         notes          = ${body.notes         ?? cur.notes},
         updated_at     = NOW()
@@ -74,6 +75,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       next_meeting         = ${nextMeeting},
       sales_person         = ${body.salesPerson   ?? null},
       appointer            = ${body.appointer     ?? cur.appointer},
+      lead_source          = ${body.leadSource    ?? cur.lead_source},
       notes                = ${body.notes         ?? null},
       contracted_at        = ${contractedAt},
       initial_fee          = ${Number(body.initialFee ?? cur.initial_fee ?? 0)},

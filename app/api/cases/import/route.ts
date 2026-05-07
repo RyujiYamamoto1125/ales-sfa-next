@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
       await db`
         INSERT INTO cases (
           customer_name, contact_person, email_address, phone,
-          status, next_meeting, sales_person, appointer, notes,
+          status, next_meeting, sales_person, appointer, lead_source, notes,
           initial_fee, monthly_fee, contract_return_date, first_deduction_date,
           contracted_at, amount
         ) VALUES (
@@ -78,6 +78,7 @@ export async function POST(req: NextRequest) {
           ${parseDate(r["商談日時"])},
           ${r["営業担当者名"]?.trim() || null},
           ${r["アポインター名"]?.trim() || null},
+          ${r["流入経路"]?.trim() || null},
           ${r["会話メモ"]?.trim() || null},
           ${parseNum(r["初期費用"])},
           ${parseNum(r["月額費用"])},

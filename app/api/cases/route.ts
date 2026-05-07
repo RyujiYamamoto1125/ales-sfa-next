@@ -18,7 +18,6 @@ export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  // 新規登録はアポインターのみ
   if (session.user.role !== "appointer") {
     return NextResponse.json({ error: "Forbidden: 新規登録はアポインターのみ可能です" }, { status: 403 });
   }
@@ -30,7 +29,7 @@ export async function POST(req: NextRequest) {
   const rows = await db`
     INSERT INTO cases (
       customer_name, contact_person, email_address, phone,
-      status, next_meeting, appointer, notes
+      status, next_meeting, appointer, lead_source, notes
     )
     VALUES (
       ${body.customerName},
@@ -40,6 +39,7 @@ export async function POST(req: NextRequest) {
       '未実行',
       ${body.nextMeeting ? new Date(body.nextMeeting) : null},
       ${body.appointer ?? null},
+      ${body.leadSource ?? null},
       ${body.notes ?? null}
     )
     RETURNING *

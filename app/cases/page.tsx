@@ -38,6 +38,15 @@ const STATUS_STYLE: Record<string, string> = {
 
 const APPOINTER_OPTIONS = ["荒木", "直申し込み", "メルマガ", "ウェビナー"];
 
+const LEAD_SOURCE_OPTIONS = [
+  "過去リード",
+  "エモロジー（代理店）",
+  "自社広告（LP）",
+  "自社広告（インスタントフォーム）",
+  "代理店",
+  "ウェビナー",
+];
+
 // ── 型 ─────────────────────────────────────────────
 interface CaseData {
   id: string;
@@ -49,6 +58,7 @@ interface CaseData {
   next_meeting?: string;
   sales_person?: string;
   appointer?: string;
+  lead_source?: string;
   notes?: string;
   initial_fee?: number;
   monthly_fee?: number;
@@ -61,7 +71,7 @@ interface CaseData {
 // ── フォーム初期値 ─────────────────────────────────
 const EMPTY_ADD = {
   customerName: "", contactPerson: "", emailAddress: "",
-  phone: "", appointer: "荒木", nextMeeting: "", notes: "",
+  phone: "", appointer: "荒木", leadSource: "", nextMeeting: "", notes: "",
 };
 
 // ── スタイル ───────────────────────────────────────
@@ -126,6 +136,7 @@ export default function CasesPage() {
         emailAddress:  c.email_address   ?? "",
         phone:         c.phone           ?? "",
         appointer:     c.appointer       ?? APPOINTER_OPTIONS[0],
+        leadSource:    c.lead_source     ?? "",
         nextMeeting:   c.next_meeting ? new Date(c.next_meeting).toISOString().slice(0, 16) : "",
         notes:         c.notes           ?? "",
       });
@@ -156,6 +167,7 @@ export default function CasesPage() {
         nextMeeting:         c.next_meeting ? new Date(c.next_meeting).toISOString().slice(0, 16) : "",
         salesPerson:         c.sales_person   ?? "",
         appointer:           c.appointer      ?? "",
+        leadSource:          c.lead_source    ?? "",
         notes:               c.notes          ?? "",
         initialFee:          c.initial_fee    ?? 0,
         monthlyFee:          c.monthly_fee    ?? 0,
@@ -333,6 +345,7 @@ export default function CasesPage() {
                             </span>
                           )}
                           {c.appointer && <span className="text-xs text-gray-400">アポ: {c.appointer}</span>}
+                          {c.lead_source && <span className="text-xs bg-indigo-50 text-indigo-500 px-1.5 py-0.5 rounded-md">{c.lead_source}</span>}
                           {c.sales_person && <span className="text-xs text-gray-400">営業: {c.sales_person}</span>}
                         </div>
                       </div>
@@ -429,6 +442,14 @@ export default function CasesPage() {
                 {APPOINTER_OPTIONS.map((a) => <option key={a}>{a}</option>)}
               </select>
             </Field>
+            <Field label="流入経路">
+              <select value={addForm.leadSource}
+                onChange={(e) => setAddForm({ ...addForm, leadSource: e.target.value })}
+                className={inputCls}>
+                <option value="">選択してください</option>
+                {LEAD_SOURCE_OPTIONS.map((s) => <option key={s}>{s}</option>)}
+              </select>
+            </Field>
             <Field label="商談日時">
               <div className="relative">
                 <Calendar size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -475,7 +496,8 @@ interface SalesForm {
 }
 interface AdminForm {
   customerName: string; contactPerson: string; emailAddress: string; phone: string;
-  status: string; nextMeeting: string; salesPerson: string; appointer: string; notes: string;
+  status: string; nextMeeting: string; salesPerson: string; appointer: string;
+  leadSource: string; notes: string;
   initialFee: number; monthlyFee: number; contractReturnDate: string; firstDeductionDate: string;
 }
 
@@ -524,6 +546,12 @@ function ApoPanel({ form, onChange, onSave, onCancel, saving }: {
         <Field label="アポインター名">
           <select value={form.appointer ?? APPOINTER_OPTIONS[0]} onChange={(e) => onChange("appointer", e.target.value)} className={inputCls}>
             {APPOINTER_OPTIONS.map((a) => <option key={a}>{a}</option>)}
+          </select>
+        </Field>
+        <Field label="流入経路">
+          <select value={form.leadSource ?? ""} onChange={(e) => onChange("leadSource", e.target.value)} className={inputCls}>
+            <option value="">選択してください</option>
+            {LEAD_SOURCE_OPTIONS.map((s) => <option key={s}>{s}</option>)}
           </select>
         </Field>
         <Field label="商談日時">
@@ -666,6 +694,12 @@ function AdminPanel({ form, onChange, onSave, onDelete, onCancel, saving }: {
             {APPOINTER_OPTIONS.map((a) => <option key={a}>{a}</option>)}
           </select>
         </Field>
+        <Field label="流入経路">
+          <select value={form.leadSource} onChange={(e) => onChange("leadSource", e.target.value)} className={inputCls}>
+            <option value="">選択してください</option>
+            {LEAD_SOURCE_OPTIONS.map((s) => <option key={s}>{s}</option>)}
+          </select>
+        </Field>
         <Field label="商談日時">
           <input type="datetime-local" value={form.nextMeeting} onChange={(e) => onChange("nextMeeting", e.target.value)} className={inputCls} />
         </Field>
@@ -743,13 +777,13 @@ function PanelActions({ onSave, onCancel, saving, saveDisabled, onDelete }: {
 // ── CSVインポートパネル ──────────────────────────────
 const CSV_HEADERS = [
   "顧客名","担当者名","メールアドレス","電話番号","ステータス",
-  "商談日時","営業担当者名","アポインター名","会話メモ",
+  "商談日時","営業担当者名","アポインター名","流入経路","会話メモ",
   "初期費用","月額費用","売上金額","契約書返送日","初回引落日","契約日",
 ];
 
 const CSV_EXAMPLE = [
   "株式会社サンプル","山田 太郎","yamada@sample.com","090-1234-5678","契約",
-  "2026/05/01 14:00","隅田","荒木","見込みあり。資料送付済み。",
+  "2026/05/01 14:00","隅田","荒木","自社広告（LP）","見込みあり。資料送付済み。",
   "100000","30000","","2026/05/10","2026/06/01","2026/05/07",
 ];
 

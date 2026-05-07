@@ -46,6 +46,7 @@ export async function initSchema() {
   await db`ALTER TABLE cases ADD COLUMN IF NOT EXISTS monthly_fee INTEGER DEFAULT 0`;
   await db`ALTER TABLE cases ADD COLUMN IF NOT EXISTS contract_return_date DATE`;
   await db`ALTER TABLE cases ADD COLUMN IF NOT EXISTS first_deduction_date DATE`;
+  await db`ALTER TABLE cases ADD COLUMN IF NOT EXISTS lead_source VARCHAR(100)`;
 
   await db`
     CREATE TABLE IF NOT EXISTS targets (
