@@ -1,44 +1,45 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
+import { sql } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
-import { connectDB } from "@/lib/mongodb";
-import Case from "@/models/Case";
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  await connectDB();
   const { id } = await params;
+  const db = sql();
   const body = await req.json();
+  const nextMeeting = body.nextMeeting ? new Date(body.nextMeeting) : null;
 
-  const existing = await Case.findById(id);
-  if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const existing = await db`SELECT contracted_at FROM cases WHERE id = ${id}`;
+  if (!existing.length) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const update: Record<string, unknown> = {
-    customerName: body.customerName,
-    status: body.status,
-    salesPerson: body.salesPerson,
-    appointer: body.appointer,
-    notes: body.notes,
-  };
+  const contractedAt = body.status === "契約" && !existing[0].contracted_at ? new Date() : existing[0].contracted_at;
 
-  if (body.nextMeeting) update.nextMeeting = new Date(body.nextMeeting);
-  if (body.status === "契約" && !existing.contractedAt) {
-    update.contractedAt = new Date();
-  }
-
-  const updated = await Case.findByIdAndUpdate(id, update, { new: true });
-  return NextResponse.json(updated);
+  const rows = await db`
+    UPDATE cases SET
+      customer_name = ${body.customerName},
+      status = ${body.status},
+      next_meeting = ${nextMeeting},
+      sales_person = ${body.salesPerson ?? null},
+      appointer = ${body.appointer ?? null},
+      notes = ${body.notes ?? null},
+      contracted_at = ${contractedAt},
+      updated_at = NOW()
+    WHERE id = ${id}
+    RETURNING *
+  `;
+  return NextResponse.json(rows[0]);
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  await connectDB();
   const { id } = await params;
-  await Case.findByIdAndDelete(id);
+  const db = sql();
+  await db`DELETE FROM cases WHERE id = ${id}`;
   return NextResponse.json({ success: true });
 }

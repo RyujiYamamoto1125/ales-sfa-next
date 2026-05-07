@@ -1,25 +1,23 @@
 import { NextResponse } from "next/server";
+import bcrypt from "bcryptjs";
+import { sql, initSchema } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
-import bcrypt from "bcryptjs";
-import { connectDB } from "@/lib/mongodb";
-import User from "@/models/User";
 
 export async function GET() {
-  await connectDB();
+  await initSchema();
 
-  const existing = await User.findOne({ email: "admin@demo.local" });
-  if (existing) {
+  const db = sql();
+  const existing = await db`SELECT id FROM users WHERE email = 'admin@demo.local' LIMIT 1`;
+  if (existing.length > 0) {
     return NextResponse.json({ message: "Already seeded" });
   }
 
   const hashed = await bcrypt.hash("demo1234", 12);
-  await User.create({
-    email: "admin@demo.local",
-    password: hashed,
-    name: "管理者",
-    role: "admin",
-  });
+  await db`
+    INSERT INTO users (email, password, name, role)
+    VALUES ('admin@demo.local', ${hashed}, '管理者', 'admin')
+  `;
 
   return NextResponse.json({ message: "Seeded successfully" });
 }

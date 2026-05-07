@@ -1,8 +1,7 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
-import { connectDB } from "@/lib/mongodb";
-import User from "@/models/User";
+import { sql } from "@/lib/db";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
@@ -14,25 +13,23 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
 
-        await connectDB();
-
-        const user = await User.findOne({ email: credentials.email });
+        const db = sql();
+        const rows = await db`SELECT * FROM users WHERE email = ${credentials.email as string} LIMIT 1`;
+        const user = rows[0];
         if (!user) return null;
 
-        const valid = await bcrypt.compare(credentials.password as string, user.password);
+        const valid = await bcrypt.compare(credentials.password as string, user.password as string);
         if (!valid) return null;
 
         return {
-          id: user._id.toString(),
-          email: user.email,
-          name: user.name,
+          id: String(user.id),
+          email: user.email as string,
+          name: user.name as string,
         };
       },
     }),
   ],
-  pages: {
-    signIn: "/login",
-  },
+  pages: { signIn: "/login" },
   session: { strategy: "jwt" },
   callbacks: {
     async jwt({ token, user }) {

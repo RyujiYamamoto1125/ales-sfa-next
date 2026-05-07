@@ -1,40 +1,39 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
+import { sql } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
-import { connectDB } from "@/lib/mongodb";
-import Target from "@/models/Target";
 
 export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  await connectDB();
+  const db = sql();
   const { searchParams } = new URL(req.url);
   const year = searchParams.get("year");
   const month = searchParams.get("month");
 
   if (year && month) {
-    const target = await Target.findOne({ year: Number(year), month: Number(month) });
-    return NextResponse.json({ targetCount: target?.targetCount ?? 0 });
+    const rows = await db`SELECT target_count FROM targets WHERE year = ${Number(year)} AND month = ${Number(month)} LIMIT 1`;
+    return NextResponse.json({ targetCount: rows[0]?.target_count ?? 0 });
   }
 
-  const targets = await Target.find().sort({ year: 1, month: 1 }).lean();
-  return NextResponse.json(targets);
+  const rows = await db`SELECT * FROM targets ORDER BY year, month`;
+  return NextResponse.json(rows);
 }
 
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  await connectDB();
+  const db = sql();
   const { year, month, targetCount } = await req.json();
 
-  const updated = await Target.findOneAndUpdate(
-    { year, month },
-    { targetCount },
-    { upsert: true, new: true }
-  );
-
-  return NextResponse.json(updated);
+  const rows = await db`
+    INSERT INTO targets (year, month, target_count)
+    VALUES (${year}, ${month}, ${targetCount})
+    ON CONFLICT (year, month) DO UPDATE SET target_count = ${targetCount}
+    RETURNING *
+  `;
+  return NextResponse.json(rows[0]);
 }
