@@ -36,7 +36,7 @@ const STATUS_STYLE: Record<string, string> = {
   "契約":                      "bg-cyan-100 text-cyan-700",
 };
 
-const APPOINTER_OPTIONS = ["荒木", "直申し込み"];
+const APPOINTER_OPTIONS = ["荒木", "直申し込み", "メルマガ", "ウェビナー"];
 
 // ── 型 ─────────────────────────────────────────────
 interface CaseData {
