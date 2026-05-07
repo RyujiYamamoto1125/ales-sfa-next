@@ -38,13 +38,20 @@ export async function GET(req: NextRequest) {
 
   // ── KPI ──
   const totalLeads = leads.reduce((s, l) => s + Number(l.lead_count), 0);
+  const thisMonthInitialFee  = thisMonthContracted.reduce((s, c) => s + Number(c.initial_fee  ?? 0), 0);
+  const thisMonthMonthlyFee  = thisMonthContracted.reduce((s, c) => s + Number(c.monthly_fee  ?? 0), 0);
+  const totalInitialFee      = contracted.reduce((s, c) => s + Number(c.initial_fee  ?? 0), 0);
+  const totalMonthlyFee      = contracted.reduce((s, c) => s + Number(c.monthly_fee  ?? 0), 0);
+
   const kpis = {
     totalCases: cases.length,
     thisMonthApo: thisMonthCases.length,
     thisMonthContracts: thisMonthContracted.length,
     totalContracts: contracted.length,
-    thisMonthAmount: thisMonthContracted.reduce((s, c) => s + Number(c.amount ?? 0), 0),
-    totalAmount: contracted.reduce((s, c) => s + Number(c.amount ?? 0), 0),
+    thisMonthInitialFee,
+    thisMonthMonthlyFee,
+    totalInitialFee,
+    totalMonthlyFee,
     contractRate: thisMonthCases.length > 0
       ? Math.round((thisMonthContracted.length / thisMonthCases.length) * 100)
       : 0,

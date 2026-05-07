@@ -42,6 +42,10 @@ export async function initSchema() {
   await db`ALTER TABLE cases ADD COLUMN IF NOT EXISTS contact_person VARCHAR(255)`;
   await db`ALTER TABLE cases ADD COLUMN IF NOT EXISTS email_address VARCHAR(255)`;
   await db`ALTER TABLE cases ADD COLUMN IF NOT EXISTS phone VARCHAR(50)`;
+  await db`ALTER TABLE cases ADD COLUMN IF NOT EXISTS initial_fee INTEGER DEFAULT 0`;
+  await db`ALTER TABLE cases ADD COLUMN IF NOT EXISTS monthly_fee INTEGER DEFAULT 0`;
+  await db`ALTER TABLE cases ADD COLUMN IF NOT EXISTS contract_return_date DATE`;
+  await db`ALTER TABLE cases ADD COLUMN IF NOT EXISTS first_deduction_date DATE`;
 
   await db`
     CREATE TABLE IF NOT EXISTS targets (
