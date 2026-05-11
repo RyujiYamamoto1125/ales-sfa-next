@@ -102,12 +102,6 @@ function SheetsDashboard({ data }: { data: SheetsData }) {
 
   return (
     <div className="space-y-6">
-      {/* バナー */}
-      <div className="flex items-center gap-2 px-4 py-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-700">
-        <TableProperties size={13} />
-        スプレッドシート連携中 — 全期間の累計データを表示
-      </div>
-
       {/* ── KPI 累計カード ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KPICard label="累計アポ数" value={`${cumulative.totalApo}件`}
@@ -315,36 +309,44 @@ export default function DashboardPage() {
     else fetchDb();
   }, [dataSource, fetchDb, fetchSheets]);
 
-  // DBモード用の期間セレクタ
-  const periodSelector = (
-    <div className="flex items-center gap-2 flex-wrap">
-      <div className="flex items-center bg-gray-100 rounded-xl p-1 gap-0.5">
+  // ヘッダーには年月のみ（DBモード）
+  const periodSelector = dataSource === "db" ? (
+    <div className="flex items-center gap-2">
+      <select value={year} onChange={e => setYear(Number(e.target.value))}
+        className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm bg-white text-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-300">
+        {[now.getFullYear()-1, now.getFullYear(), now.getFullYear()+1].map(y=><option key={y}>{y}</option>)}
+      </select>
+      <select value={month} onChange={e => setMonth(Number(e.target.value))}
+        className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm bg-white text-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-300">
+        {Array.from({length:12},(_,i)=>i+1).map(m=><option key={m} value={m}>{m}月</option>)}
+      </select>
+    </div>
+  ) : undefined;
+
+  // コンテンツ先頭に表示するデータソーストグル
+  const sourceToggle = (
+    <div className="flex items-center gap-2 mb-6">
+      <div className="flex items-center bg-white border border-gray-200 rounded-xl p-1 gap-0.5 shadow-sm">
         <button onClick={() => setDataSource("db")}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${dataSource === "db" ? "bg-white text-indigo-700 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
-          <Database size={12} /> DB
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${dataSource === "db" ? "bg-indigo-600 text-white shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+          <Database size={14} /> DBデータ
         </button>
         <button onClick={() => setDataSource("sheets")}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${dataSource === "sheets" ? "bg-white text-emerald-700 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
-          <TableProperties size={12} /> スプレッドシート
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${dataSource === "sheets" ? "bg-emerald-600 text-white shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+          <TableProperties size={14} /> スプレッドシート
         </button>
       </div>
-      {dataSource === "db" && <>
-        <select value={year} onChange={e => setYear(Number(e.target.value))}
-          className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm bg-white text-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-300">
-          {[now.getFullYear()-1, now.getFullYear(), now.getFullYear()+1].map(y=><option key={y}>{y}</option>)}
-        </select>
-        <select value={month} onChange={e => setMonth(Number(e.target.value))}
-          className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm bg-white text-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-300">
-          {Array.from({length:12},(_,i)=>i+1).map(m=><option key={m} value={m}>{m}月</option>)}
-        </select>
-      </>}
+      {dataSource === "sheets" && (
+        <span className="text-xs text-emerald-600 font-medium">全期間の累計データを表示</span>
+      )}
     </div>
   );
 
   if (loading) {
     return (
       <AppLayout title="ダッシュボード" actions={periodSelector}>
-        <div className="flex items-center justify-center h-full">
+        {sourceToggle}
+        <div className="flex items-center justify-center" style={{height:"calc(100% - 72px)"}}>
           <div className="text-center">
             <div className="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mx-auto mb-3" />
             <p className="text-sm text-gray-400">
@@ -359,7 +361,8 @@ export default function DashboardPage() {
   if (error) {
     return (
       <AppLayout title="ダッシュボード" actions={periodSelector}>
-        <div className="bg-red-50 border border-red-200 rounded-2xl p-8 text-center max-w-lg mx-auto mt-10">
+        {sourceToggle}
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-8 text-center max-w-lg mx-auto mt-4">
           <AlertCircle size={32} className="text-red-400 mx-auto mb-3" />
           <p className="text-sm font-semibold text-red-700 mb-1">エラー</p>
           <p className="text-xs text-red-600 mb-4">{error}</p>
@@ -376,6 +379,7 @@ export default function DashboardPage() {
   if (dataSource === "sheets") {
     return (
       <AppLayout title="ダッシュボード" actions={periodSelector}>
+        {sourceToggle}
         {sheetsData && <SheetsDashboard data={sheetsData} />}
       </AppLayout>
     );
@@ -389,6 +393,7 @@ export default function DashboardPage() {
 
   return (
     <AppLayout title="ダッシュボード" actions={periodSelector}>
+      {sourceToggle}
       {/* タブ */}
       <div className="flex gap-1 bg-white rounded-2xl p-1.5 w-fit mb-6 shadow-sm border border-gray-100">
         {TABS.map((t) => (
