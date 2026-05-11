@@ -1,17 +1,12 @@
-import Papa from "papaparse";
-
 const SHEET_ID =
   process.env.GOOGLE_SPREADSHEET_ID ?? "1x4xRvuHZVocq0cyUovNSLA_mvhmtBRkouvMSM_0X1eA";
 
-const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv`;
+// Google Visualization Query API（APIキー不要・公開シートで動作）
+const GVIZ_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json`;
 
 const KNOWN_LEAD_SOURCES = new Set([
-  "過去リード",
-  "エモロジー(広告代理店)",
-  "自社広告（LP）",
-  "自社広告（インスタントフォーム）",
-  "代理店",
-  "ウェビナー",
+  "過去リード", "エモロジー(広告代理店)", "自社広告（LP）",
+  "自社広告（インスタントフォーム）", "代理店", "ウェビナー",
   "アウトバウンドコール",
 ]);
 
@@ -25,107 +20,64 @@ export interface SheetCase {
   contractDate: Date | null;
 }
 
-export interface SheetMetric {
-  label: string;
-  emology: string;
-  form: string;
-  ownLpEarly: string;
-  ownLpLate: string;
-  total: string;
+interface GvizCell { v: unknown; f?: string }
+interface GvizRow  { c: (GvizCell | null)[] }
+
+function str(cell: GvizCell | null | undefined): string {
+  return String(cell?.v ?? "").trim();
 }
 
-export interface SheetsData {
-  cases: SheetCase[];
-  metrics: SheetMetric[];
+// gviz は M/D 形式の日付を誤った年で返すので補正する
+function parseGvizDate(cell: GvizCell | null | undefined): Date | null {
+  if (!cell?.v) return null;
+  const m = String(cell.v).match(/^Date\((\d+),(\d+),(\d+)/);
+  if (!m) return null;
+  const month0 = parseInt(m[2]); // 0-indexed
+  const day    = parseInt(m[3]);
+  const fmt    = cell.f ?? "";
+  // 書式に4桁年が含まれている（"2025/11/11"）→ gviz の年を信頼
+  if (/^\d{4}/.test(fmt)) {
+    return new Date(parseInt(m[1]), month0, day);
+  }
+  // "11/26" のような M/D 形式 → 月で年を推定
+  const y = month0 >= 6 ? 2025 : 2026; // 0-indexed: 6=July
+  return new Date(y, month0, day);
 }
 
-function parseSheetDate(v: string): Date | null {
-  const s = (v ?? "").trim().split(" ")[0];
-  if (!s) return null;
-  // "2025/11/11" or "2025-11-11"
-  if (/^\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2}$/.test(s)) {
-    return new Date(s.replace(/\//g, "-"));
+export async function fetchSheetCases(): Promise<SheetCase[]> {
+  const res = await fetch(GVIZ_URL, { next: { revalidate: 300 } });
+  if (!res.ok) throw new Error(`gviz fetch failed: ${res.status}`);
+
+  const text = await res.text();
+
+  // "/*O_o*/\ngoogle.visualization.Query.setResponse({...});" を JSON に変換
+  const jsonText = text
+    .replace(/^[^(]+\(/, "")
+    .replace(/\);\s*$/, "");
+
+  let json: { table: { rows: GvizRow[] } };
+  try {
+    json = JSON.parse(jsonText);
+  } catch {
+    throw new Error("スプレッドシートの解析に失敗しました。シートが公開されているか確認してください。");
   }
-  // "11/26" or "1/9" — month >= 7 → 2025, else 2026
-  const md = s.match(/^(\d{1,2})\/(\d{1,2})$/);
-  if (md) {
-    const m = parseInt(md[1]);
-    const d = parseInt(md[2]);
-    const y = m >= 7 ? 2025 : 2026;
-    return new Date(y, m - 1, d);
-  }
-  return null;
-}
-
-export async function fetchSheetsData(): Promise<SheetsData> {
-  const res = await fetch(CSV_URL, {
-    next: { revalidate: 300 },
-    redirect: "follow",
-  });
-
-  if (!res.ok) {
-    throw new Error(
-      `スプレッドシートの取得に失敗しました (HTTP ${res.status})。シートが「リンクを知っている全員」に共有されているか確認してください。`
-    );
-  }
-
-  const csv = await res.text();
-
-  // auth リダイレクト検出
-  if (csv.includes("accounts.google.com") || csv.toLowerCase().includes("<html")) {
-    throw new Error(
-      "スプレッドシートが非公開です。Google スプレッドシートの共有設定を「リンクを知っている全員が閲覧可」に変更してください。"
-    );
-  }
-
-  const { data: rows } = Papa.parse<string[]>(csv, {
-    skipEmptyLines: false,
-    header: false,
-  });
 
   const cases: SheetCase[] = [];
-  const metrics: SheetMetric[] = [];
-  let inMetrics = false;
+  for (const row of json.table.rows) {
+    if (!row?.c) continue;
+    const leadSource = str(row.c[0]);
+    if (!KNOWN_LEAD_SOURCES.has(leadSource)) continue;
 
-  for (let i = 1; i < rows.length; i++) {
-    const row = rows[i];
-    if (!row || row.length === 0) continue;
-
-    const col0 = (row[0] ?? "").trim();
-    const col1 = (row[1] ?? "").trim();
-
-    // サマリヘッダ検出: A列空、B列 = "エモロジー"
-    if (!inMetrics && col0 === "" && col1 === "エモロジー") {
-      inMetrics = true;
-      continue;
-    }
-
-    if (inMetrics) {
-      if (col0) {
-        metrics.push({
-          label: col0,
-          emology: (row[1] ?? "").trim(),
-          form: (row[2] ?? "").trim(),
-          ownLpEarly: (row[3] ?? "").trim(),
-          ownLpLate: (row[4] ?? "").trim(),
-          total: (row[5] ?? "").trim(),
-        });
-      }
-      continue;
-    }
-
-    if (KNOWN_LEAD_SOURCES.has(col0)) {
-      cases.push({
-        leadSource: col0,
-        apoDate: parseSheetDate(row[2] ?? ""),
-        companyName: (row[3] ?? "").trim(),
-        appointer: (row[10] ?? "").trim(),
-        salesPerson: (row[12] ?? "").trim(),
-        result: (row[13] ?? "").trim(),
-        contractDate: parseSheetDate(row[15] ?? ""),
-      });
-    }
+    cases.push({
+      leadSource,
+      apoDate:      parseGvizDate(row.c[2]),
+      companyName:  str(row.c[3]),
+      appointer:    str(row.c[10]),
+      salesPerson:  str(row.c[12]),
+      result:       str(row.c[13]),
+      contractDate: parseGvizDate(row.c[15]),
+    });
   }
 
-  return { cases, metrics };
+  return cases;
 }
