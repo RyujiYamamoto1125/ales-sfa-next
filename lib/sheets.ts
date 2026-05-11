@@ -1,8 +1,17 @@
-const SHEET_ID = process.env.GOOGLE_SPREADSHEET_ID ?? "1x4xRvuHZVocq0cyUovNSLA_mvhmtBRkouvMSM_0X1eA";
+import Papa from "papaparse";
+
+const SHEET_ID =
+  process.env.GOOGLE_SPREADSHEET_ID ?? "1x4xRvuHZVocq0cyUovNSLA_mvhmtBRkouvMSM_0X1eA";
+
+const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv`;
 
 const KNOWN_LEAD_SOURCES = new Set([
-  "過去リード", "エモロジー(広告代理店)", "自社広告（LP）",
-  "自社広告（インスタントフォーム）", "代理店", "ウェビナー",
+  "過去リード",
+  "エモロジー(広告代理店)",
+  "自社広告（LP）",
+  "自社広告（インスタントフォーム）",
+  "代理店",
+  "ウェビナー",
   "アウトバウンドコール",
 ]);
 
@@ -37,7 +46,7 @@ function parseSheetDate(v: string): Date | null {
   if (/^\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2}$/.test(s)) {
     return new Date(s.replace(/\//g, "-"));
   }
-  // "11/26" or "1/9" — infer year: month >= 7 → 2025, else 2026
+  // "11/26" or "1/9" — month >= 7 → 2025, else 2026
   const md = s.match(/^(\d{1,2})\/(\d{1,2})$/);
   if (md) {
     const m = parseInt(md[1]);
@@ -49,20 +58,30 @@ function parseSheetDate(v: string): Date | null {
 }
 
 export async function fetchSheetsData(): Promise<SheetsData> {
-  const apiKey = process.env.GOOGLE_SHEETS_API_KEY;
-  if (!apiKey) throw new Error("GOOGLE_SHEETS_API_KEY is not configured");
+  const res = await fetch(CSV_URL, {
+    next: { revalidate: 300 },
+    redirect: "follow",
+  });
 
-  const url =
-    `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/A1:T600?key=${encodeURIComponent(apiKey)}`;
-
-  const res = await fetch(url, { next: { revalidate: 300 } });
   if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`Sheets API ${res.status}: ${body.slice(0, 200)}`);
+    throw new Error(
+      `スプレッドシートの取得に失敗しました (HTTP ${res.status})。シートが「リンクを知っている全員」に共有されているか確認してください。`
+    );
   }
 
-  const json = await res.json();
-  const rows: string[][] = json.values ?? [];
+  const csv = await res.text();
+
+  // auth リダイレクト検出
+  if (csv.includes("accounts.google.com") || csv.toLowerCase().includes("<html")) {
+    throw new Error(
+      "スプレッドシートが非公開です。Google スプレッドシートの共有設定を「リンクを知っている全員が閲覧可」に変更してください。"
+    );
+  }
+
+  const { data: rows } = Papa.parse<string[]>(csv, {
+    skipEmptyLines: false,
+    header: false,
+  });
 
   const cases: SheetCase[] = [];
   const metrics: SheetMetric[] = [];
@@ -75,7 +94,7 @@ export async function fetchSheetsData(): Promise<SheetsData> {
     const col0 = (row[0] ?? "").trim();
     const col1 = (row[1] ?? "").trim();
 
-    // Summary metrics header: empty A, "エモロジー" in B
+    // サマリヘッダ検出: A列空、B列 = "エモロジー"
     if (!inMetrics && col0 === "" && col1 === "エモロジー") {
       inMetrics = true;
       continue;
