@@ -32,17 +32,17 @@ export async function GET(req: NextRequest) {
 
     const allContracted = cases.filter((c) => c.result === "契約");
 
-    // ── KPI ──
+    // ── KPI（スプレッドシートは全期間累計で表示） ──
     const kpis = {
       totalCases: cases.length,
-      thisMonthApo: thisMonthApo.length,
-      thisMonthContracts: thisMonthContracted.length,
+      thisMonthApo: cases.length,           // 全期間アポ数をここに入れる
+      thisMonthContracts: allContracted.length, // 全期間契約数
       totalContracts: allContracted.length,
       thisMonthAmount: 0,
       totalAmount: 0,
       contractRate:
-        thisMonthApo.length > 0
-          ? Math.round((thisMonthContracted.length / thisMonthApo.length) * 100)
+        cases.length > 0
+          ? Math.round((allContracted.length / cases.length) * 100)
           : 0,
       apoRate: null as number | null,
       globalTarget: 0,

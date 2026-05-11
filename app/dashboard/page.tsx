@@ -235,18 +235,28 @@ export default function DashboardPage() {
       {tab === "概要" && (
         <div className="space-y-6">
           {/* KPIカード4枚 */}
+          {dataSource === "sheets" && (
+            <div className="flex items-center gap-2 px-4 py-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-700 mb-1">
+              <TableProperties size={13} />
+              スプレッドシートモード：全期間の累計を表示しています
+            </div>
+          )}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <KPICard label="今月のアポ数" value={`${kpis.thisMonthApo}件`}
+            <KPICard
+              label={dataSource === "sheets" ? "累計アポ数" : "今月のアポ数"}
+              value={`${kpis.thisMonthApo}件`}
               icon={Users} iconBg="bg-indigo-50" iconColor="text-indigo-600"
-              sub={`累計 ${kpis.totalCases}件`} />
-            <KPICard label="今月の契約数" value={`${kpis.thisMonthContracts}件`}
+              sub={dataSource === "sheets" ? "スプレッドシート全件" : `累計 ${kpis.totalCases}件`} />
+            <KPICard
+              label={dataSource === "sheets" ? "累計契約数" : "今月の契約数"}
+              value={`${kpis.thisMonthContracts}件`}
               icon={TrendingUp} iconBg="bg-emerald-50" iconColor="text-emerald-600"
-              trend={kpis.globalTarget > 0 ? { value: Math.round(targetDiff / kpis.globalTarget * 100), label: "vs目標" } : undefined}
-              sub={kpis.globalTarget > 0 ? `目標 ${kpis.globalTarget}件` : undefined} />
+              trend={!dataSource && kpis.globalTarget > 0 ? { value: Math.round(targetDiff / kpis.globalTarget * 100), label: "vs目標" } : undefined}
+              sub={dataSource === "sheets" ? "スプレッドシート全件" : kpis.globalTarget > 0 ? `目標 ${kpis.globalTarget}件` : undefined} />
             {dataSource === "sheets" ? (
-              <KPICard label="累計契約数" value={`${kpis.totalContracts}件`}
-                icon={Database} iconBg="bg-emerald-50" iconColor="text-emerald-600"
-                sub="スプレッドシート集計" />
+              <KPICard label="後追い件数" value={`${statusCounts["後追い"] ?? 0}件`}
+                icon={Megaphone} iconBg="bg-orange-50" iconColor="text-orange-500"
+                sub="要フォローアップ" />
             ) : (
               <KPICard label="今月の売上" value={`¥${(kpis.thisMonthAmount/10000).toFixed(1)}万`}
                 icon={DollarSign} iconBg="bg-amber-50" iconColor="text-amber-600"
@@ -254,7 +264,7 @@ export default function DashboardPage() {
             )}
             <KPICard label="契約率" value={`${kpis.contractRate}%`}
               icon={Percent} iconBg="bg-purple-50" iconColor="text-purple-600"
-              sub={kpis.apoRate != null ? `アポ率 ${kpis.apoRate}%` : dataSource === "sheets" ? "アポ÷契約" : "リード未入力"} />
+              sub={dataSource === "sheets" ? "全期間 契約÷アポ" : kpis.apoRate != null ? `アポ率 ${kpis.apoRate}%` : "リード未入力"} />
           </div>
 
           {/* グラフ2列 */}
