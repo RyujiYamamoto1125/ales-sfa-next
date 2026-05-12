@@ -28,17 +28,22 @@ function parseGvizDate(cell: GvizCell | null | undefined): Date | null {
   if (!cell?.v) return null;
   const m = String(cell.v).match(/^Date\((\d+),(\d+),(\d+)/);
   if (!m) return null;
-  const month0 = parseInt(m[2]);
-  const day    = parseInt(m[3]);
-  const fmt    = cell.f ?? "";
+  const gvizYear = parseInt(m[1]);
+  const month0   = parseInt(m[2]);
+  const day      = parseInt(m[3]);
+  const fmt      = cell.f ?? "";
   // 書式に4桁年がある場合はその年を信頼
-  if (/^\d{4}/.test(fmt)) return new Date(parseInt(m[1]), month0, day);
-  // "11/26" のような M/D 形式 → month0 >= 6 (July以降) は2025年、それ以外は2026年
-  return new Date(month0 >= 6 ? 2025 : 2026, month0, day);
+  if (/^\d{4}/.test(fmt)) return new Date(gvizYear, month0, day);
+  // 年なし書式("11/26"等): gvizが割り当てた年が今日より30日超先であれば
+  // スプレッドシートの年省略入力による誤解釈と判断して1年引く
+  const candidate = new Date(gvizYear, month0, day);
+  const thirtyDaysAhead = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+  if (candidate > thirtyDaysAhead) return new Date(gvizYear - 1, month0, day);
+  return candidate;
 }
 
 export async function fetchSheetCases(): Promise<SheetCase[]> {
-  const res = await fetch(GVIZ_URL, { next: { revalidate: 300 } });
+  const res = await fetch(GVIZ_URL, { next: { revalidate: 60 } });
   if (!res.ok) throw new Error(`スプレッドシートの取得に失敗しました (HTTP ${res.status})`);
 
   const text = await res.text();
