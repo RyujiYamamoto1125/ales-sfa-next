@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import AppLayout from "@/components/AppLayout";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   CartesianGrid, Legend,
 } from "recharts";
 import {
-  Users, Phone, MessageSquare, TrendingUp, Megaphone, Percent,
+  Users, Phone, MessageSquare, TrendingUp, Megaphone, RefreshCw, Clock,
 } from "lucide-react";
 
 interface MonthlySummary {
@@ -61,23 +61,53 @@ function RateBadge({ value, thresholds }: { value: number; thresholds: [number, 
 }
 
 export default function MonthlyPage() {
-  const [rows, setRows] = useState<MonthlySummary[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [rows, setRows]           = useState<MonthlySummary[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError]         = useState<string | null>(null);
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
 
-  useEffect(() => {
+  const fetchData = useCallback((silent = false) => {
+    if (!silent) setLoading(true); else setRefreshing(true);
+    setError(null);
     fetch("/api/monthly-summary")
       .then((r) => r.json())
       .then((d) => {
         if (d.error) { setError(d.error); return; }
         setRows(d);
+        setUpdatedAt(new Date().toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" }));
       })
       .catch(() => setError("データの取得に失敗しました"))
-      .finally(() => setLoading(false));
+      .finally(() => { setLoading(false); setRefreshing(false); });
   }, []);
 
+  useEffect(() => { fetchData(false); }, [fetchData]);
+
+  const now = new Date();
+  const currentMonthKey = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const currentMonth = rows.find((r) => r.month === currentMonthKey);
+  const chartData = [...rows].reverse().slice(-12);
+
+  const headerActions = (
+    <div className="flex items-center gap-2">
+      {updatedAt && (
+        <span className="text-xs text-gray-400 flex items-center gap-1 mr-1">
+          <Clock size={11} /> {updatedAt} 更新
+        </span>
+      )}
+      <button
+        onClick={() => fetchData(true)}
+        disabled={refreshing}
+        className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors ${refreshing ? "opacity-50 pointer-events-none" : ""}`}
+      >
+        <RefreshCw size={13} className={refreshing ? "animate-spin" : ""} />
+        更新
+      </button>
+    </div>
+  );
+
   if (loading) return (
-    <AppLayout title="月次数値確認">
+    <AppLayout title="月次数値確認" actions={headerActions}>
       <div className="flex items-center justify-center h-64">
         <div className="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
       </div>
@@ -85,25 +115,13 @@ export default function MonthlyPage() {
   );
 
   if (error) return (
-    <AppLayout title="月次数値確認">
+    <AppLayout title="月次数値確認" actions={headerActions}>
       <p className="text-red-500 text-sm p-8">{error}</p>
     </AppLayout>
   );
 
-  const now = new Date();
-  const currentMonthKey = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, "0")}`;
-  const currentMonth = rows.find((r) => r.month === currentMonthKey);
-
-  const totalLeads     = rows.reduce((s, r) => s + r.leads, 0);
-  const totalApo       = rows.reduce((s, r) => s + r.apo, 0);
-  const totalMeetings  = rows.reduce((s, r) => s + r.meetings, 0);
-  const totalContracts = rows.reduce((s, r) => s + r.contracts, 0);
-  const totalAdSpend   = rows.reduce((s, r) => s + r.adSpend, 0);
-
-  const chartData = [...rows].reverse().slice(-12);
-
   return (
-    <AppLayout title="月次数値確認">
+    <AppLayout title="月次数値確認" actions={headerActions}>
       <div className="space-y-6">
 
         {/* 当月サマリ */}
@@ -120,36 +138,13 @@ export default function MonthlyPage() {
               sub="当月スケジュール済み" />
             <KPICard label="商談実行数" value={`${currentMonth?.meetings ?? 0}件`}
               icon={MessageSquare} iconBg="bg-violet-50" iconColor="text-violet-600"
-              sub="不参加を除く実施数" />
+              sub="初回商談日時で集計" />
             <KPICard label="契約数" value={`${currentMonth?.contracts ?? 0}件`}
               icon={TrendingUp} iconBg="bg-emerald-50" iconColor="text-emerald-600"
               sub="当月契約締結数" />
             <KPICard label="消化広告費" value={currentMonth?.adSpend ? fmtYen(currentMonth.adSpend) : "—"}
               icon={Megaphone} iconBg="bg-orange-50" iconColor="text-orange-500"
               sub="当月広告消化額" />
-          </div>
-        </div>
-
-        {/* 全期間累計 */}
-        <div>
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">
-            全期間累計
-          </p>
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-            <KPICard label="総リード数" value={`${totalLeads.toLocaleString()}件`}
-              icon={Users} iconBg="bg-indigo-50" iconColor="text-indigo-600" />
-            <KPICard label="総アポ数" value={`${totalApo}件`}
-              icon={Phone} iconBg="bg-cyan-50" iconColor="text-cyan-600" />
-            <KPICard label="総商談数" value={`${totalMeetings}件`}
-              icon={MessageSquare} iconBg="bg-violet-50" iconColor="text-violet-600" />
-            <KPICard label="総契約数" value={`${totalContracts}件`}
-              icon={TrendingUp} iconBg="bg-emerald-50" iconColor="text-emerald-600" />
-            <KPICard
-              label="総広告費"
-              value={totalAdSpend > 0 ? fmtYen(totalAdSpend) : "—"}
-              icon={Megaphone} iconBg="bg-orange-50" iconColor="text-orange-500"
-              sub={totalLeads > 0 ? `リード転換率 ${rate(totalContracts, totalLeads)}%` : undefined}
-            />
           </div>
         </div>
 
@@ -227,7 +222,7 @@ export default function MonthlyPage() {
                 {rows.length === 0 && (
                   <tr>
                     <td colSpan={8} className="py-12 text-center text-sm text-gray-400">
-                      データがありません。リード・案件・広告費を入力してください。
+                      データがありません。
                     </td>
                   </tr>
                 )}
