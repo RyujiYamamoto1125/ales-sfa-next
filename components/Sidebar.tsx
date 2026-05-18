@@ -4,14 +4,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
 import {
-  LayoutDashboard, ClipboardList, Target, LogOut, Megaphone,
+  LayoutDashboard, LogOut, Megaphone, Building2, CalendarDays,
 } from "lucide-react";
 
 const NAV = [
-  { href: "/dashboard", label: "ダッシュボード", icon: LayoutDashboard, roles: ["admin","sales","appointer"] },
-  { href: "/cases",     label: "案件管理",       icon: ClipboardList,   roles: ["admin","sales","appointer"] },
-  { href: "/ads",       label: "広告数値管理",   icon: Megaphone,       roles: ["admin","sales"] },
-  { href: "/targets",   label: "目標設定",        icon: Target,          roles: ["admin"] },
+  { href: "/dashboard",  label: "ダッシュボード",  icon: LayoutDashboard, roles: ["admin","sales","appointer"] },
+  { href: "/monthly",    label: "月次数値確認",    icon: CalendarDays,    roles: ["admin","sales","appointer"] },
+  { href: "/management", label: "経営管理",         icon: Building2,       roles: ["admin"] },
+  { href: "/ads",        label: "広告数値入力",     icon: Megaphone,       roles: ["admin","sales"] },
 ];
 
 const ROLE_LABEL: Record<string, string> = {
