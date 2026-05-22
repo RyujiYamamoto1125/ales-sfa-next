@@ -672,7 +672,11 @@ export default function DashboardPage() {
     if (channelLoaded) return;
     setSubLoading(true);
     const res = await fetch("/api/management/simulate");
-    if (res.ok) { const d = await res.json(); setChannelStats(d.channelStats ?? []); }
+    if (res.ok) {
+      const d = await res.json();
+      setChannelStats(d.channelStats ?? []);
+      if (d.stats?.totalLeads) setTotalLeads(d.stats.totalLeads);
+    }
     setChannelLoaded(true);
     setSubLoading(false);
   }, [channelLoaded]);
@@ -691,8 +695,13 @@ export default function DashboardPage() {
   useEffect(() => {
     fetch("/api/monthly-summary")
       .then((r) => r.json())
-      .then((d: { leads: number }[]) => {
-        if (Array.isArray(d)) setTotalLeads(d.reduce((s, r) => s + (r.leads ?? 0), 0));
+      .then((d: { monthly: { leads: number }[]; totalLeadsAllChannels: number }) => {
+        if (d.totalLeadsAllChannels) {
+          setTotalLeads(d.totalLeadsAllChannels);
+        } else if (Array.isArray(d)) {
+          // 旧レスポンス形式へのフォールバック
+          setTotalLeads((d as unknown as { leads: number }[]).reduce((s, r) => s + (r.leads ?? 0), 0));
+        }
       })
       .catch(() => {});
   }, []);

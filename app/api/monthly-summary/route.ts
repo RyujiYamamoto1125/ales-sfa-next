@@ -12,7 +12,7 @@ export async function GET() {
   await initSchema();
   const db = sql();
 
-  const [leadApoData, salesData, adRows] = await Promise.all([
+  const [leadApoData, salesData, adRows, agencyLeads, lpOverride, ifLeads] = await Promise.all([
     fetchMonthlyLeadApo(),
     fetchMonthlySalesStats(),
     db`
@@ -20,7 +20,16 @@ export async function GET() {
       FROM ad_metrics
       GROUP BY month ORDER BY month
     `,
+    db`SELECT SUM(lead_count)::int as total FROM leads`.catch(() => [{ total: 0 }]),
+    db`SELECT leads FROM channel_overrides WHERE channel_key = 'lp' LIMIT 1`.catch(() => []),
+    db`SELECT SUM(cv_count)::int as total FROM ad_creatives WHERE medium = 'instant_form'`.catch(() => [{ total: 0 }]),
   ]);
+
+  // 全チャネル合計リード数
+  const agLeadsTotal = Number((agencyLeads as { total: number }[])[0]?.total ?? 0);
+  const lpLeadsTotal = Number((lpOverride as { leads: number }[])[0]?.leads ?? 0);
+  const ifLeadsTotal = Number((ifLeads as { total: number }[])[0]?.total ?? 0);
+  const totalLeadsAllChannels = agLeadsTotal + lpLeadsTotal + ifLeadsTotal;
 
   const allMonths = new Set([
     ...leadApoData.map((r) => r.month),
@@ -41,5 +50,5 @@ export async function GET() {
     };
   });
 
-  return NextResponse.json(result);
+  return NextResponse.json({ monthly: result, totalLeadsAllChannels });
 }

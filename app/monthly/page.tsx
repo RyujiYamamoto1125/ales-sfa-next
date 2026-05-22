@@ -74,7 +74,8 @@ export default function MonthlyPage() {
       .then((r) => r.json())
       .then((d) => {
         if (d.error) { setError(d.error); return; }
-        setRows(d);
+        // 新レスポンス形式 { monthly: [...], totalLeadsAllChannels: N } に対応
+        setRows(Array.isArray(d) ? d : (d.monthly ?? []));
         setUpdatedAt(new Date().toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" }));
       })
       .catch(() => setError("データの取得に失敗しました"))

@@ -309,11 +309,15 @@ export async function GET(_req: NextRequest) {
       ifOverride ? ifOverride.spend || (ifData?.total_spend ?? 0) : (ifData?.total_spend ?? 0)),
   ];
 
+  // ── 全チャネル合計リード数 ───────────────────────────────────────────────
+  const totalLeadsAllChannels = channelStats.reduce((s, c) => s + c.leads, 0);
+
   return NextResponse.json({
     stats: {
       // 契約・アポ（シート）
       totalContracts: sheetTotal,
       totalApo: sheetApo,
+      totalLeads: totalLeadsAllChannels,
       avgContractRate: sheetRate,
       activeContractsCount: activeContracts.length,
       avgContractsPerMonth,
