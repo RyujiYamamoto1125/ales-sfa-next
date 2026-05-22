@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { fetchSheetCases, SALESPEOPLE, SheetCase } from "@/lib/sheets";
+import { fetchSheetCases, fetchMonthlySalesStats, SALESPEOPLE, SheetCase } from "@/lib/sheets";
 
 export const dynamic = "force-dynamic";
 
@@ -132,7 +132,10 @@ export async function GET(req: NextRequest) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
-    const allCases = await fetchSheetCases();
+    const [allCases, salesStats] = await Promise.all([
+      fetchSheetCases(),
+      fetchMonthlySalesStats(),
+    ]);
 
     // クエリパラメータで期間フィルタ
     const { searchParams } = new URL(req.url);
@@ -161,10 +164,21 @@ export async function GET(req: NextRequest) {
     const stats = buildStats(filtered);
     // 全期間データは月別グラフのために常に付与
     const allStats = period && period !== "all" ? buildStats(allCases) : null;
+    const baseMonthly = allStats?.monthly ?? stats.monthly;
+
+    // アポ数を「初回商談日時（L列）」ベースに補正
+    // fetchMonthlySalesStats の meetings は L列（実際の商談日）でカウントしたもの
+    const meetingsMap: Record<string, number> = {};
+    salesStats.forEach(s => { meetingsMap[s.month] = s.meetings; });
+
+    const allMonthly = baseMonthly.map(m => ({
+      ...m,
+      apo: meetingsMap[m.month] ?? m.apo,
+    }));
 
     return NextResponse.json({
       ...stats,
-      allMonthly: allStats?.monthly ?? stats.monthly,
+      allMonthly,
       fetchedAt: new Date().toISOString(),
     });
 
