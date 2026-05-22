@@ -803,23 +803,88 @@ export default function DashboardPage() {
         {/* ── 概要タブ ── */}
         {activeTab === "overview" && (
           <div className="space-y-6">
+            {/* ── 集客ファネル ── */}
             <div>
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">累計実績（全期間）</p>
-              <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-                <KPICard label="累計アポ数" value={`${cumulative.totalApo}件`} badge="累計" icon={Users} iconBg="bg-indigo-50" iconColor="text-indigo-600" sub="全期間合計" />
-                <KPICard label="累計契約数" value={`${cumulative.totalContracts}件`} badge="累計" icon={TrendingUp} iconBg="bg-emerald-50" iconColor="text-emerald-600" sub="全期間合計" />
-                <KPICard label="後追い中" value={`${cumulative.followUps}件`} icon={AlertCircle} iconBg="bg-orange-50" iconColor="text-orange-500" sub="要フォローアップ" />
-                <KPICard label="累計契約率（アポ比）" value={`${cumulative.contractRate}%`} badge="累計" icon={Percent} iconBg="bg-purple-50" iconColor="text-purple-600"
-                  sub={`見込(高)${cumulative.prospectHigh} 中${cumulative.prospectMid} 低${cumulative.prospectLow}`} />
-                <KPICard
-                  label="契約率（リード比）"
-                  value={totalLeads > 0 ? `${Math.round((cumulative.totalContracts / totalLeads) * 100)}%` : "—"}
-                  badge="累計"
-                  icon={Percent}
-                  iconBg="bg-cyan-50"
-                  iconColor="text-cyan-600"
-                  sub={totalLeads > 0 ? `契約${cumulative.totalContracts}件 ÷ リード${totalLeads.toLocaleString()}件` : "リードデータを入力してください"}
-                />
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">集客ファネル（累計・全期間）</p>
+              <div className="bg-white rounded-2xl px-6 py-6 shadow-sm border border-gray-100">
+                <div className="flex items-center justify-center flex-wrap gap-y-4">
+
+                  {/* リード数 */}
+                  <div className="text-center px-5">
+                    <div className="w-14 h-14 rounded-2xl bg-blue-50 flex items-center justify-center mx-auto mb-3">
+                      <Megaphone size={22} className="text-blue-500" />
+                    </div>
+                    <p className="text-3xl font-bold text-gray-800">{totalLeads > 0 ? totalLeads.toLocaleString() : "—"}</p>
+                    <p className="text-sm font-medium text-gray-600 mt-1">リード数</p>
+                    <p className="text-[10px] text-gray-400 mt-0.5">全チャネル合計</p>
+                  </div>
+
+                  {/* → アポ率 */}
+                  <div className="flex flex-col items-center min-w-[64px]">
+                    <p className="text-sm font-bold text-indigo-600 mb-1">
+                      {totalLeads > 0 ? `${Math.round((cumulative.totalApo / totalLeads) * 100)}%` : "—"}
+                    </p>
+                    <div className="flex items-center">
+                      <div className="w-8 md:w-14 h-0.5 bg-gradient-to-r from-blue-200 to-indigo-400" />
+                      <ChevronRight size={15} className="text-indigo-400 -ml-1" />
+                    </div>
+                    <p className="text-[10px] text-gray-400 mt-1">アポ率</p>
+                  </div>
+
+                  {/* アポ数 */}
+                  <div className="text-center px-5">
+                    <div className="w-14 h-14 rounded-2xl bg-indigo-50 flex items-center justify-center mx-auto mb-3">
+                      <Users size={22} className="text-indigo-600" />
+                    </div>
+                    <p className="text-3xl font-bold text-gray-800">{cumulative.totalApo.toLocaleString()}</p>
+                    <p className="text-sm font-medium text-gray-600 mt-1">アポ数</p>
+                    <p className="text-[10px] text-gray-400 mt-0.5">全期間合計</p>
+                  </div>
+
+                  {/* → 契約率 */}
+                  <div className="flex flex-col items-center min-w-[64px]">
+                    <p className="text-sm font-bold text-emerald-600 mb-1">
+                      {cumulative.totalApo > 0 ? `${Math.round((cumulative.totalContracts / cumulative.totalApo) * 100)}%` : "—"}
+                    </p>
+                    <div className="flex items-center">
+                      <div className="w-8 md:w-14 h-0.5 bg-gradient-to-r from-indigo-200 to-emerald-400" />
+                      <ChevronRight size={15} className="text-emerald-400 -ml-1" />
+                    </div>
+                    <p className="text-[10px] text-gray-400 mt-1">契約率</p>
+                  </div>
+
+                  {/* 契約数 */}
+                  <div className="text-center px-5">
+                    <div className="w-14 h-14 rounded-2xl bg-emerald-50 flex items-center justify-center mx-auto mb-3">
+                      <TrendingUp size={22} className="text-emerald-600" />
+                    </div>
+                    <p className="text-3xl font-bold text-gray-800">{cumulative.totalContracts.toLocaleString()}</p>
+                    <p className="text-sm font-medium text-gray-600 mt-1">契約数</p>
+                    <p className="text-[10px] text-gray-400 mt-0.5">全期間合計</p>
+                  </div>
+
+                  {/* 区切り＋総転換率 */}
+                  <div className="hidden md:block w-px h-16 bg-gray-100 mx-4" />
+                  <div className="text-center px-5">
+                    <div className="w-14 h-14 rounded-2xl bg-purple-50 flex items-center justify-center mx-auto mb-3">
+                      <Percent size={22} className="text-purple-600" />
+                    </div>
+                    <p className="text-3xl font-bold text-gray-800">
+                      {totalLeads > 0 ? `${Math.round((cumulative.totalContracts / totalLeads) * 100)}%` : "—"}
+                    </p>
+                    <p className="text-sm font-medium text-gray-600 mt-1">総転換率</p>
+                    <p className="text-[10px] text-gray-400 mt-0.5">リード→契約</p>
+                  </div>
+                </div>
+
+                {/* 後追い・見込み サマリー */}
+                <div className="mt-5 pt-4 border-t border-gray-50 flex flex-wrap justify-center gap-4 text-xs text-gray-500">
+                  <span className="flex items-center gap-1"><AlertCircle size={12} className="text-orange-400" /><span className="font-medium text-orange-500">後追い中 {cumulative.followUps}件</span></span>
+                  <span className="text-gray-300">|</span>
+                  <span>見込み（高）<span className="font-semibold text-gray-700">{cumulative.prospectHigh}件</span></span>
+                  <span>見込み（中）<span className="font-semibold text-gray-700">{cumulative.prospectMid}件</span></span>
+                  <span>見込み（低）<span className="font-semibold text-gray-700">{cumulative.prospectLow}件</span></span>
+                </div>
               </div>
             </div>
 
