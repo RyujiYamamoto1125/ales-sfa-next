@@ -98,4 +98,45 @@ export async function initSchema() {
       UNIQUE(date, medium)
     )
   `;
+
+  await db`
+    CREATE TABLE IF NOT EXISTS staff_contracts (
+      id SERIAL PRIMARY KEY,
+      name VARCHAR(255) NOT NULL,
+      role VARCHAR(50) NOT NULL,
+      employment_type VARCHAR(50) NOT NULL,
+      monthly_cost INTEGER DEFAULT 0,
+      commission_rate DECIMAL(5,2) DEFAULT 0,
+      contract_start DATE,
+      contract_end DATE,
+      memo TEXT,
+      active BOOLEAN DEFAULT true,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `;
+  await db`ALTER TABLE staff_contracts ADD COLUMN IF NOT EXISTS per_contract_fee INTEGER DEFAULT 0`;
+  await db`ALTER TABLE staff_contracts ADD COLUMN IF NOT EXISTS per_contract_monthly_fee INTEGER DEFAULT 0`;
+  await db`ALTER TABLE staff_contracts ADD COLUMN IF NOT EXISTS per_meeting_fee INTEGER DEFAULT 0`;
+
+  await db`
+    CREATE TABLE IF NOT EXISTS ad_creatives (
+      id SERIAL PRIMARY KEY,
+      ad_name VARCHAR(255) NOT NULL,
+      ad_set_name VARCHAR(255),
+      status VARCHAR(50),
+      medium VARCHAR(20),
+      spend INTEGER DEFAULT 0,
+      impressions INTEGER DEFAULT 0,
+      reach INTEGER DEFAULT 0,
+      frequency DECIMAL(8,4) DEFAULT 0,
+      cpm DECIMAL(12,4) DEFAULT 0,
+      cv_count INTEGER DEFAULT 0,
+      cv_type VARCHAR(255),
+      cpa INTEGER DEFAULT 0,
+      daily_budget INTEGER DEFAULT 0,
+      report_start DATE,
+      report_end DATE,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `;
 }

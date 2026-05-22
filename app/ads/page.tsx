@@ -3,18 +3,18 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import AppLayout from "@/components/AppLayout";
-import { Megaphone, TrendingUp, DollarSign, MousePointerClick, Download, Trash2 } from "lucide-react";
+import { Megaphone, TrendingUp, DollarSign, MousePointerClick, Download, Trash2, Upload } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
   LineChart, Line, Legend,
 } from "recharts";
 
 // ── 定数 ─────────────────────────────────────────────
-const MEDIUMS = ["Google", "Meta", "TikTok", "LINE", "その他"];
+const MEDIUMS = ["Google", "Meta", "TikTok", "LINE", "広告代理店", "その他"];
 
 const MEDIUM_COLOR: Record<string, string> = {
   Google: "#4285F4", Meta: "#1877F2", TikTok: "#000000",
-  LINE: "#06C755", その他: "#94A3B8",
+  LINE: "#06C755", 広告代理店: "#A855F7", その他: "#94A3B8",
 };
 
 // ── 型 ───────────────────────────────────────────────
@@ -47,6 +47,417 @@ function calc(row: Pick<AdMetric, "ad_spend" | "actual_cv" | "clicks" | "impress
 function fmt(v: number | null, suffix = "", digits = 1) {
   if (v === null) return "—";
   return v.toFixed(digits) + suffix;
+}
+
+// ── 広告代理店 簡易入力フォーム ──────────────────────────
+function AgencyForm({ onSaved }: { onSaved: () => void }) {
+  const now = new Date();
+  const defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const [month,   setMonth]   = useState(defaultMonth);
+  const [spend,   setSpend]   = useState(0);
+  const [cv,      setCv]      = useState(0);
+  const [saving,  setSaving]  = useState(false);
+  const [saved,   setSaved]   = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    // 月の1日をDBの日付として登録（date, medium でユニーク制約）
+    const date = `${month}-01`;
+    await fetch("/api/ad-metrics", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        date, medium: "広告代理店",
+        adSpend: spend, dashboardCv: cv, actualCv: cv,
+        clicks: 0, impressions: 0,
+      }),
+    });
+    setSaving(false); setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+    onSaved();
+  }
+
+  return (
+    <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 mb-6">
+      <div className="flex items-center gap-2 mb-5">
+        <div className="w-8 h-8 rounded-lg bg-purple-50 flex items-center justify-center">
+          <span className="text-purple-600 font-bold text-sm">代</span>
+        </div>
+        <div>
+          <h3 className="text-sm font-semibold text-gray-700">広告代理店 簡易入力</h3>
+          <p className="text-xs text-gray-400">総広告費とCV数のみ入力 — 媒体「広告代理店」で登録します</p>
+        </div>
+      </div>
+
+      <form onSubmit={handleSubmit}>
+        <div className="flex flex-wrap gap-4 items-end">
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1.5">月</label>
+            <input type="month" value={month} onChange={(e) => setMonth(e.target.value)}
+              className="border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 bg-white" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1.5">総広告費（円）</label>
+            <input type="number" min={0} value={spend}
+              onChange={(e) => setSpend(Number(e.target.value))}
+              className="w-48 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 bg-white" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1.5">総CV数</label>
+            <input type="number" min={0} value={cv}
+              onChange={(e) => setCv(Number(e.target.value))}
+              className="w-32 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 bg-white" />
+          </div>
+          <button type="submit" disabled={saving}
+            className="px-6 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-sm font-semibold disabled:opacity-50 transition-colors">
+            {saved ? "保存済み ✓" : saving ? "保存中..." : "保存する"}
+          </button>
+        </div>
+
+        {(spend > 0 || cv > 0) && (
+          <div className="mt-4 flex gap-6 px-4 py-3 bg-purple-50 rounded-xl">
+            <div className="text-center">
+              <p className="text-xs text-purple-400">CPA</p>
+              <p className="text-lg font-bold text-purple-700">
+                {cv > 0 ? `¥${Math.round(spend / cv).toLocaleString()}` : "—"}
+              </p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-purple-400">広告費</p>
+              <p className="text-lg font-bold text-purple-700">¥{spend.toLocaleString()}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-purple-400">CV数</p>
+              <p className="text-lg font-bold text-purple-700">{cv}件</p>
+            </div>
+          </div>
+        )}
+      </form>
+    </div>
+  );
+}
+
+// ── Meta CSV パーサー ────────────────────────────────
+const META_DATE_KEYS  = ["日付", "レポートの開始日", "Reporting starts", "Date"];
+const META_SPEND_KEYS = ["消化金額（JPY）", "金額（JPY）", "Amount spent (JPY)", "Amount spent", "消化金額 (JPY)", "金額 (JPY)", "消化金額(JPY)", "金額(JPY)"];
+const META_IMPR_KEYS  = ["インプレッション数", "Impressions"];
+const META_CLICK_KEYS = ["リンクのクリック数", "Link clicks", "クリック数（すべて）", "Clicks (all)"];
+const META_CV_KEYS    = ["結果", "Results"];
+
+function findHeader(headers: string[], candidates: string[]): string | null {
+  for (const h of headers) {
+    const ht = h.trim();
+    if (candidates.some(c => ht === c || ht.startsWith(c))) return h;
+  }
+  return null;
+}
+
+function parseCSVText(text: string): { headers: string[]; rows: string[][] } {
+  text = text.replace(/^﻿/, "");
+  const parseRow = (line: string): string[] => {
+    const fields: string[] = [];
+    let field = "";
+    let inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (c === '"' && !inQ)  { inQ = true; continue; }
+      if (c === '"' && inQ)   { if (line[i + 1] === '"') { field += '"'; i++; } else inQ = false; continue; }
+      if (c === ',' && !inQ)  { fields.push(field); field = ""; continue; }
+      field += c;
+    }
+    fields.push(field);
+    return fields;
+  };
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  if (!lines.length) return { headers: [], rows: [] };
+  return { headers: parseRow(lines[0]), rows: lines.slice(1).map(parseRow) };
+}
+
+function toDateStr(raw: string): string | null {
+  const s = raw.trim().replace(/\//g, "-");
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null;
+}
+
+function parseNum(raw: string): number {
+  return Number((raw ?? "").replace(/[¥,\s円]/g, "")) || 0;
+}
+
+interface ParsedMetaRow {
+  date: string; adSpend: number; dashboardCv: number;
+  actualCv: number; clicks: number; impressions: number;
+}
+
+function MetaCsvImport({ onImported }: { onImported: () => void }) {
+  const [preview,   setPreview]   = useState<ParsedMetaRow[]>([]);
+  const [warnings,  setWarnings]  = useState<string[]>([]);
+  const [importing, setImporting] = useState(false);
+  const [result,    setResult]    = useState<string | null>(null);
+  const [fileName,  setFileName]  = useState<string | null>(null);
+
+  function handleFile(file: File) {
+    setResult(null);
+    setFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target?.result as string;
+      const { headers, rows } = parseCSVText(text);
+
+      const dateKey  = findHeader(headers, META_DATE_KEYS);
+      const spendKey = findHeader(headers, META_SPEND_KEYS);
+      const imprKey  = findHeader(headers, META_IMPR_KEYS);
+      const clickKey = findHeader(headers, META_CLICK_KEYS);
+      const cvKey    = findHeader(headers, META_CV_KEYS);
+
+      const warns: string[] = [];
+      if (!dateKey)  warns.push("日付列が見つかりませんでした");
+      if (!spendKey) warns.push("消化金額列が見つかりませんでした");
+      if (!imprKey)  warns.push("インプレッション数列が見つかりませんでした");
+      if (!clickKey) warns.push("クリック数列が見つかりませんでした");
+      if (!cvKey)    warns.push("結果（CV）列が見つかりませんでした — 0でインポートします");
+      setWarnings(warns);
+
+      const idx = (key: string | null) => key ? headers.indexOf(key) : -1;
+      const dateIdx  = idx(dateKey);
+      const spendIdx = idx(spendKey);
+      const imprIdx  = idx(imprKey);
+      const clickIdx = idx(clickKey);
+      const cvIdx    = idx(cvKey);
+
+      const parsed: ParsedMetaRow[] = [];
+      for (const row of rows) {
+        const date = toDateStr(dateIdx >= 0 ? row[dateIdx] ?? "" : "");
+        if (!date) continue;
+        const cv = cvIdx >= 0 ? parseNum(row[cvIdx] ?? "0") : 0;
+        parsed.push({
+          date,
+          adSpend:     spendIdx >= 0 ? parseNum(row[spendIdx] ?? "0") : 0,
+          dashboardCv: cv,
+          actualCv:    cv,
+          clicks:      clickIdx >= 0 ? parseNum(row[clickIdx] ?? "0") : 0,
+          impressions: imprIdx  >= 0 ? parseNum(row[imprIdx]  ?? "0") : 0,
+        });
+      }
+      setPreview(parsed);
+    };
+    reader.readAsText(file, "utf-8");
+  }
+
+  async function handleImport() {
+    setImporting(true);
+    const body = preview.map(r => ({ ...r, medium: "Meta" }));
+    const res = await fetch("/api/ad-metrics/import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const d = await res.json();
+    setImporting(false);
+    if (d.imported != null) {
+      setResult(`✓ ${d.imported}件をMetaとしてインポートしました（同日データは上書き）`);
+      setPreview([]);
+      setFileName(null);
+      onImported();
+    } else {
+      setResult("エラーが発生しました");
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 mb-6">
+      <div className="flex items-center gap-2 mb-4">
+        <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
+          <Upload size={16} className="text-blue-600" />
+        </div>
+        <div>
+          <h3 className="text-sm font-semibold text-gray-700">Meta広告 CSVインポート</h3>
+          <p className="text-xs text-gray-400">広告マネージャの「日付」内訳CSVをそのまま読み込み、媒体=Metaで登録します</p>
+        </div>
+      </div>
+
+      <label className="flex flex-col items-center justify-center w-full h-28 border-2 border-dashed border-gray-200 rounded-xl cursor-pointer hover:border-blue-300 hover:bg-blue-50/20 transition-colors">
+        <Upload size={20} className="text-gray-300 mb-2" />
+        <span className="text-sm text-gray-400">{fileName ?? "CSVファイルを選択またはドロップ"}</span>
+        <span className="text-xs text-gray-300 mt-1">.csv（UTF-8）</span>
+        <input type="file" accept=".csv" className="hidden"
+          onChange={(e) => { if (e.target.files?.[0]) handleFile(e.target.files[0]); }} />
+      </label>
+
+      {warnings.length > 0 && (
+        <div className="mt-3 p-3 bg-amber-50 rounded-xl space-y-1">
+          {warnings.map((w, i) => (
+            <p key={i} className="text-xs text-amber-700">⚠ {w}</p>
+          ))}
+        </div>
+      )}
+
+      {preview.length > 0 && (
+        <div className="mt-4">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs font-semibold text-gray-500">{preview.length}件のデータを検出</p>
+            <button onClick={handleImport} disabled={importing}
+              className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold disabled:opacity-50 transition-colors">
+              {importing ? "インポート中..." : "インポート実行"}
+            </button>
+          </div>
+          <div className="overflow-x-auto max-h-56 overflow-y-auto border border-gray-100 rounded-xl">
+            <table className="w-full text-xs">
+              <thead className="bg-gray-50 sticky top-0">
+                <tr>
+                  {["日付","消化広告費","管理画面CV","実CV","クリック","表示回数"].map(h => (
+                    <th key={h} className="px-3 py-2 text-left text-gray-400 font-semibold whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {preview.slice(0, 60).map((r, i) => (
+                  <tr key={i} className="border-t border-gray-50">
+                    <td className="px-3 py-2 text-gray-600">{r.date}</td>
+                    <td className="px-3 py-2 font-medium text-gray-700">¥{r.adSpend.toLocaleString()}</td>
+                    <td className="px-3 py-2 text-gray-600">{r.dashboardCv}</td>
+                    <td className="px-3 py-2 text-gray-600">{r.actualCv}</td>
+                    <td className="px-3 py-2 text-gray-600">{r.clicks.toLocaleString()}</td>
+                    <td className="px-3 py-2 text-gray-600">{r.impressions.toLocaleString()}</td>
+                  </tr>
+                ))}
+                {preview.length > 60 && (
+                  <tr><td colSpan={6} className="px-3 py-2 text-gray-400 text-center">…他{preview.length - 60}件</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {result && (
+        <div className="mt-3 p-3 bg-emerald-50 rounded-xl">
+          <p className="text-xs text-emerald-700 font-semibold">{result}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── リード管理シート 実CV連携パネル ──────────────────────
+function SheetCvPanel({ year, month, onSynced }: { year: number; month: number; onSynced: () => void }) {
+  const [data,    setData]    = useState<{ date: string; campaign: string; count: number }[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const [result,  setResult]  = useState<string | null>(null);
+  const [error,   setError]   = useState<string | null>(null);
+
+  useEffect(() => {
+    setLoading(true);
+    setError(null);
+    fetch(`/api/leads-count?year=${year}&month=${month}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.error) { setError(d.error); setData([]); }
+        else setData(d);
+        setLoading(false);
+      })
+      .catch(() => { setError("データ取得に失敗しました"); setLoading(false); });
+  }, [year, month]);
+
+  async function handleSync() {
+    if (!data.length) return;
+    setSyncing(true);
+    const res = await fetch("/api/leads-count", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    const d = await res.json();
+    setSyncing(false);
+    if (d.synced != null) {
+      setResult(`✓ ${d.synced}件の実CVを同期しました（広告費・クリック数は既存値を保持）`);
+      onSynced();
+      setTimeout(() => setResult(null), 4000);
+    } else {
+      setResult("エラーが発生しました");
+    }
+  }
+
+  const byCampaign: Record<string, number> = {};
+  data.forEach(d => { byCampaign[d.campaign] = (byCampaign[d.campaign] ?? 0) + d.count; });
+  const totalCv = Object.values(byCampaign).reduce((s, c) => s + c, 0);
+
+  return (
+    <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 mb-6">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center">
+            <span className="text-emerald-600 font-bold text-sm">実</span>
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-gray-700">リード管理シート 実CV（自社LP）</h3>
+            <p className="text-xs text-gray-400">スプレッドシートの「リード管理」シートから集計 — 個人情報はカウントのみ取得</p>
+          </div>
+        </div>
+        {data.length > 0 && (
+          <button onClick={handleSync} disabled={syncing}
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold disabled:opacity-50 transition-colors">
+            {syncing ? "同期中..." : "実CVを同期"}
+          </button>
+        )}
+      </div>
+
+      {loading && <p className="text-xs text-gray-400 py-2">読み込み中...</p>}
+      {error   && <p className="text-xs text-red-500 py-2">⚠ {error}</p>}
+
+      {!loading && !error && data.length === 0 && (
+        <p className="text-xs text-gray-400 py-2">{year}年{month}月のリードデータがありません</p>
+      )}
+
+      {!loading && !error && data.length > 0 && (
+        <>
+          {/* 企画別サマリー */}
+          <div className="flex flex-wrap gap-6 mb-4 px-4 py-3 bg-emerald-50 rounded-xl">
+            {Object.entries(byCampaign).map(([campaign, count]) => (
+              <div key={campaign} className="text-center">
+                <p className="text-xs text-emerald-500 font-medium">{campaign}</p>
+                <p className="text-xl font-bold text-emerald-700">{count}件</p>
+              </div>
+            ))}
+            {Object.keys(byCampaign).length > 1 && (
+              <div className="text-center border-l border-emerald-200 pl-6">
+                <p className="text-xs text-emerald-500 font-medium">合計</p>
+                <p className="text-xl font-bold text-emerald-700">{totalCv}件</p>
+              </div>
+            )}
+          </div>
+
+          {/* 日別テーブル */}
+          <div className="overflow-x-auto max-h-52 overflow-y-auto border border-gray-100 rounded-xl">
+            <table className="w-full text-xs">
+              <thead className="bg-gray-50 sticky top-0">
+                <tr>
+                  {["日付", "企画（流入経路）", "CV数"].map(h => (
+                    <th key={h} className="px-3 py-2 text-left text-gray-400 font-semibold whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {data.map((r, i) => (
+                  <tr key={i} className="border-t border-gray-50">
+                    <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{r.date}</td>
+                    <td className="px-3 py-2 text-gray-700 font-medium">{r.campaign}</td>
+                    <td className="px-3 py-2 font-bold text-emerald-700">{r.count}件</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
+      {result && (
+        <div className="mt-3 p-3 bg-emerald-50 rounded-xl">
+          <p className="text-xs text-emerald-700 font-semibold">{result}</p>
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ── スタイル ─────────────────────────────────────────
@@ -212,6 +623,15 @@ export default function AdsPage() {
 
   return (
     <AppLayout title="広告数値管理" actions={periodActions}>
+
+      {/* ── 広告代理店 簡易入力 ── */}
+      {canEdit && <AgencyForm onSaved={fetchData} />}
+
+      {/* ── Meta CSVインポート ── */}
+      {canEdit && <MetaCsvImport onImported={fetchData} />}
+
+      {/* ── リード管理シート 実CV連携 ── */}
+      {canEdit && <SheetCvPanel year={year} month={month} onSynced={fetchData} />}
 
       {/* ── 入力フォーム ── */}
       {canEdit && (
