@@ -1,99 +1,170 @@
+/**
+ * lib/sheets.ts
+ * Google Sheets API v4（サービスアカウント認証）でデータ取得。
+ * GOOGLE_SERVICE_ACCOUNT_KEY 環境変数が設定されていれば API 経由でアクセスし、
+ * スプレッドシートの共有設定に関わらず読み取れる。
+ */
+
+import { google } from "googleapis";
+
 const SHEET_ID =
   process.env.GOOGLE_SPREADSHEET_ID ?? "1x4xRvuHZVocq0cyUovNSLA_mvhmtBRkouvMSM_0X1eA";
 
-const GVIZ_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json`;
 const LEADS_GID = "201502389"; // リード管理シート
 
 // 営業担当者3名（スプレッドシートの列M）
 export const SALESPEOPLE = ["山本", "隅田", "片野"] as const;
-export type Salesperson = typeof SALESPEOPLE[number];
+export type Salesperson = (typeof SALESPEOPLE)[number];
+
+// ── サービスアカウント認証 ─────────────────────────────────
+function getAuthClient() {
+  const keyJson = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
+  if (!keyJson) {
+    throw new Error(
+      "GOOGLE_SERVICE_ACCOUNT_KEY が設定されていません。" +
+        "Vercel の環境変数にサービスアカウントのJSONを設定してください。"
+    );
+  }
+  let credentials: {
+    client_email: string;
+    private_key: string;
+  };
+  try {
+    credentials = JSON.parse(keyJson);
+  } catch {
+    throw new Error("GOOGLE_SERVICE_ACCOUNT_KEY の JSON パースに失敗しました。");
+  }
+
+  return new google.auth.JWT({
+    email: credentials.client_email,
+    key: credentials.private_key,
+    scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
+  });
+}
+
+// ── シートGIDからシート名に変換 ────────────────────────────
+// Sheets API はシート名 or A1 範囲で指定するため、GID → sheetName の変換が必要
+async function getSheetNameByGid(
+  sheets: ReturnType<typeof google.sheets>,
+  gid: string
+): Promise<string> {
+  const meta = await sheets.spreadsheets.get({ spreadsheetId: SHEET_ID });
+  const sheet = meta.data.sheets?.find((s) => String(s.properties?.sheetId) === gid);
+  if (!sheet?.properties?.title) throw new Error(`GID ${gid} のシートが見つかりません。`);
+  return sheet.properties.title;
+}
+
+// ── シートデータ取得（全列・フォーマット済み値）──────────────
+async function fetchSheetValues(range: string): Promise<string[][]> {
+  const auth = getAuthClient();
+  const sheets = google.sheets({ version: "v4", auth });
+
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: SHEET_ID,
+    range,
+    valueRenderOption: "FORMATTED_VALUE", // 日付は "2025/05/20" のような文字列で返る
+  });
+
+  return (res.data.values ?? []) as string[][];
+}
+
+// ── 日付文字列パーサー ─────────────────────────────────────
+// Sheets API から返る典型フォーマット: "2025/5/20", "2025-05-20", "5/20" など
+function parseDateStr(raw: string | undefined): Date | null {
+  if (!raw) return null;
+  const s = raw.trim();
+  if (!s) return null;
+
+  // "YYYY/MM/DD" or "YYYY-MM-DD" or "YYYY/M/D"
+  const m1 = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+  if (m1) return new Date(parseInt(m1[1]), parseInt(m1[2]) - 1, parseInt(m1[3]));
+
+  // "MM/DD" or "M/D" — 年なし: 今日より30日超先なら昨年扱い
+  const m2 = s.match(/^(\d{1,2})\/(\d{1,2})$/);
+  if (m2) {
+    const year = new Date().getFullYear();
+    const candidate = new Date(year, parseInt(m2[1]) - 1, parseInt(m2[2]));
+    const thirtyAhead = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    if (candidate > thirtyAhead) return new Date(year - 1, parseInt(m2[1]) - 1, parseInt(m2[2]));
+    return candidate;
+  }
+
+  return null;
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 公開インターフェース（旧 gviz 版と同一シグネチャ）
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 export interface SheetCase {
-  leadSource:  string;
-  apoDate:     Date | null;
+  leadSource: string;
+  apoDate: Date | null;
   companyName: string;
-  appointer:   string;
+  appointer: string;
   salesPerson: string;
-  result:      string;
+  result: string;
   contractDate: Date | null;
 }
 
-interface GvizCell { v: unknown; f?: string }
-interface GvizRow  { c: (GvizCell | null)[] }
+// ── 商談管理シート（先頭シート）────────────────────────────
+export async function fetchSheetCases(): Promise<SheetCase[]> {
+  // 先頭シート（GID 0 = 最初のシート）を取得
+  // range は "シート名!A:P" の形式。先頭シートはシート名省略可能
+  const rows = await fetchSheetValues("A:P");
 
-function str(cell: GvizCell | null | undefined): string {
-  return String(cell?.v ?? "").trim();
+  const spSet = new Set<string>(SALESPEOPLE);
+  const cases: SheetCase[] = [];
+
+  for (let i = 1; i < rows.length; i++) {
+    // 1行目はヘッダーとしてスキップ
+    const row = rows[i];
+    if (!row || row.length === 0) continue;
+
+    const salesPerson = (row[12] ?? "").trim(); // M列(index12)
+    if (!spSet.has(salesPerson)) continue;
+
+    cases.push({
+      leadSource: (row[0] ?? "").trim(),   // A列
+      apoDate: parseDateStr(row[2]),         // C列
+      companyName: (row[3] ?? "").trim(),   // D列
+      appointer: (row[10] ?? "").trim(),    // K列
+      salesPerson,
+      result: (row[13] ?? "").trim(),       // N列
+      contractDate: parseDateStr(row[15]),  // P列
+    });
+  }
+
+  return cases;
 }
 
-function parseGvizDate(cell: GvizCell | null | undefined): Date | null {
-  if (!cell?.v) return null;
-  const m = String(cell.v).match(/^Date\((\d+),(\d+),(\d+)/);
-  if (!m) return null;
-  const gvizYear = parseInt(m[1]);
-  const month0   = parseInt(m[2]);
-  const day      = parseInt(m[3]);
-  const fmt      = cell.f ?? "";
-  // 書式に4桁年がある場合はその年を信頼
-  if (/^\d{4}/.test(fmt)) return new Date(gvizYear, month0, day);
-  // 年なし書式("11/26"等): gvizが割り当てた年が今日より30日超先であれば
-  // スプレッドシートの年省略入力による誤解釈と判断して1年引く
-  const candidate = new Date(gvizYear, month0, day);
-  const thirtyDaysAhead = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-  if (candidate > thirtyDaysAhead) return new Date(gvizYear - 1, month0, day);
-  return candidate;
-}
-
-// ── リード管理シート用 ────────────────────────────────────
+// ── リード管理シート ──────────────────────────────────────
 export interface LeadsCount {
   date: string;     // "YYYY-MM-DD"
   campaign: string; // 流入経路（企画名）
   count: number;
 }
 
-function parseLeadDate(cell: GvizCell | null | undefined): string | null {
-  if (!cell) return null;
-  // GVIZ datetime: Date(year,month0,day,h,m,s)
-  const m = String(cell.v ?? "").match(/^Date\((\d+),(\d+),(\d+)/);
-  if (m) {
-    const y = parseInt(m[1]);
-    const mo = parseInt(m[2]) + 1;
-    const d = parseInt(m[3]);
-    return `${y}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-  }
-  // フォーマット文字列 or テキスト: "YYYY/MM/DD ..."
-  const raw = (cell.f ?? String(cell.v ?? "")).trim();
-  const m2 = raw.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
-  if (m2) {
-    return `${m2[1]}-${String(m2[2]).padStart(2, "0")}-${String(m2[3]).padStart(2, "0")}`;
-  }
-  return null;
-}
-
 export async function fetchLeadsCount(): Promise<LeadsCount[]> {
-  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${LEADS_GID}`;
-  const res = await fetch(url, { next: { revalidate: 60 } });
-  if (!res.ok) throw new Error(`リード管理シートの取得に失敗しました (HTTP ${res.status})`);
+  const auth = getAuthClient();
+  const sheets = google.sheets({ version: "v4", auth });
+  const sheetName = await getSheetNameByGid(sheets, LEADS_GID);
 
-  const text = await res.text();
-  const jsonText = text.replace(/^[^(]+\(/, "").replace(/\);\s*$/, "");
+  const rows = await fetchSheetValues(`${sheetName}!A:B`);
 
-  let json: { table: { rows: GvizRow[] } };
-  try {
-    json = JSON.parse(jsonText);
-  } catch {
-    throw new Error("リード管理シートの解析に失敗しました。公開共有設定を確認してください。");
-  }
-
-  // 日付×企画のカウントのみ（個人情報は一切保持しない）
   const countMap = new Map<string, number>();
   const metaMap = new Map<string, { date: string; campaign: string }>();
 
-  for (const row of json.table.rows) {
-    if (!row?.c) continue;
-    const campaign = str(row.c[0]);
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row) continue;
+    const campaign = (row[0] ?? "").trim();
     if (!campaign) continue;
-    const date = parseLeadDate(row.c[1]);
-    if (!date) continue;
+
+    const rawDate = row[1] ?? "";
+    // "YYYY/MM/DD HH:MM:SS" or "YYYY/MM/DD" 形式
+    const m = rawDate.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+    if (!m) continue;
+    const date = `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
 
     const key = `${date}|${campaign}`;
     countMap.set(key, (countMap.get(key) ?? 0) + 1);
@@ -105,55 +176,44 @@ export async function fetchLeadsCount(): Promise<LeadsCount[]> {
     .sort((a, b) => a.date.localeCompare(b.date));
 }
 
-// ── 月次サマリ: リード管理シート (B=資料請求日時, O=ステータス, P=アポ取得月) ──
-
+// ── 月次サマリ: リード管理シート ──────────────────────────
 export interface MonthlyLeadApo {
-  month: string;  // "YYYY/MM"
+  month: string; // "YYYY/MM"
   leads: number;
   apo: number;
 }
 
 export async function fetchMonthlyLeadApo(): Promise<MonthlyLeadApo[]> {
-  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${LEADS_GID}`;
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) throw new Error(`リード管理シートの取得に失敗しました (HTTP ${res.status})`);
+  const auth = getAuthClient();
+  const sheets = google.sheets({ version: "v4", auth });
+  const sheetName = await getSheetNameByGid(sheets, LEADS_GID);
 
-  const text = await res.text();
-  const jsonText = text.replace(/^[^(]+\(/, "").replace(/\);\s*$/, "");
-  const json: { table: { rows: GvizRow[] } } = JSON.parse(jsonText);
+  const rows = await fetchSheetValues(`${sheetName}!A:P`);
 
   const leadsByMonth: Record<string, number> = {};
-  const apoByMonth:   Record<string, number> = {};
+  const apoByMonth: Record<string, number> = {};
 
-  for (const row of json.table.rows) {
-    if (!row?.c) continue;
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row) continue;
 
-    // B列 (index 1): 資料請求日時 datetime → group by YYYY/MM
-    const bCell = row.c[1];
-    if (bCell?.v) {
-      const m = String(bCell.v).match(/^Date\((\d+),(\d+)/);
-      if (m) {
-        const year  = parseInt(m[1]);
-        const month = parseInt(m[2]) + 1;  // gviz は 0-based
-        const mk = `${year}/${String(month).padStart(2, "0")}`;
-        leadsByMonth[mk] = (leadsByMonth[mk] ?? 0) + 1;
-      }
-    }
+    // B列(index1): 資料請求日時
+    const bRaw = row[1] ?? "";
+    const bm = bRaw.match(/^(\d{4})[\/\-](\d{1,2})/);
+    if (bm) {
+      const mk = `${bm[1]}/${bm[2].padStart(2, "0")}`;
+      leadsByMonth[mk] = (leadsByMonth[mk] ?? 0) + 1;
 
-    // O列 (index 14): ステータス = "アポ獲得済", P列 (index 15): アポ取得月 (数値)
-    const oCell = row.c[14];
-    const pCell = row.c[15];
-    if (oCell?.v && String(oCell.v).includes("アポ") && pCell?.v != null) {
-      const monthNum = Math.round(Number(pCell.v));
-      if (monthNum >= 1 && monthNum <= 12) {
-        // B列の年を参照（なければ当年）
-        let year = new Date().getFullYear();
-        if (bCell?.v) {
-          const bm = String(bCell.v).match(/^Date\((\d+),/);
-          if (bm) year = parseInt(bm[1]);
+      // O列(index14): ステータス、P列(index15): アポ取得月
+      const status = (row[14] ?? "").trim();
+      const apoMonthRaw = (row[15] ?? "").trim();
+      if (status.includes("アポ") && apoMonthRaw) {
+        const monthNum = parseInt(apoMonthRaw);
+        if (monthNum >= 1 && monthNum <= 12) {
+          const year = parseInt(bm[1]);
+          const mk2 = `${year}/${String(monthNum).padStart(2, "0")}`;
+          apoByMonth[mk2] = (apoByMonth[mk2] ?? 0) + 1;
         }
-        const mk = `${year}/${String(monthNum).padStart(2, "0")}`;
-        apoByMonth[mk] = (apoByMonth[mk] ?? 0) + 1;
       }
     }
   }
@@ -162,49 +222,39 @@ export async function fetchMonthlyLeadApo(): Promise<MonthlyLeadApo[]> {
   return [...allMonths].sort().map((month) => ({
     month,
     leads: leadsByMonth[month] ?? 0,
-    apo:   apoByMonth[month]   ?? 0,
+    apo: apoByMonth[month] ?? 0,
   }));
 }
 
-// ── 月次サマリ: 営業管理シート (N=商談結果, P=契約日, L=初回商談日時) ──
-
+// ── 月次サマリ: 営業管理シート ────────────────────────────
 export interface MonthlySalesStats {
   month: string;
-  meetings: number;  // 初回商談日時 (L列) が当月のもの
-  contracts: number; // 商談結果=契約 (N列) かつ 契約日 (P列) が当月のもの
+  meetings: number;
+  contracts: number;
 }
 
 export async function fetchMonthlySalesStats(): Promise<MonthlySalesStats[]> {
-  const res = await fetch(GVIZ_URL, { cache: "no-store" });
-  if (!res.ok) throw new Error(`営業管理シートの取得に失敗しました (HTTP ${res.status})`);
+  const rows = await fetchSheetValues("A:P");
 
-  const text = await res.text();
-  const jsonText = text.replace(/^[^(]+\(/, "").replace(/\);\s*$/, "");
-  const json: { table: { rows: GvizRow[] } } = JSON.parse(jsonText);
+  const meetingsByMonth: Record<string, number> = {};
+  const contractsByMonth: Record<string, number> = {};
 
-  const meetingsByMonth:   Record<string, number> = {};
-  const contractsByMonth:  Record<string, number> = {};
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row) continue;
 
-  for (const row of json.table.rows) {
-    if (!row?.c) continue;
-
-    // L列 (index 11): 初回商談日時 → 商談実行数
-    const lCell = row.c[11];
-    if (lCell?.v) {
-      const m = String(lCell.v).match(/^Date\((\d+),(\d+)/);
-      if (m) {
-        const year  = parseInt(m[1]);
-        const month = parseInt(m[2]) + 1;
-        const mk = `${year}/${String(month).padStart(2, "0")}`;
-        meetingsByMonth[mk] = (meetingsByMonth[mk] ?? 0) + 1;
-      }
+    // L列(index11): 初回商談日時
+    const lRaw = row[11] ?? "";
+    const lm = lRaw.match(/^(\d{4})[\/\-](\d{1,2})/);
+    if (lm) {
+      const mk = `${lm[1]}/${lm[2].padStart(2, "0")}`;
+      meetingsByMonth[mk] = (meetingsByMonth[mk] ?? 0) + 1;
     }
 
-    // N列 (index 13): 商談結果 = "契約", P列 (index 15): 契約日
-    const nCell = row.c[13];
-    if (nCell?.v === "契約") {
-      const pCell = row.c[15];
-      const dt = parseGvizDate(pCell);
+    // N列(index13): 商談結果 = "契約", P列(index15): 契約日
+    const result = (row[13] ?? "").trim();
+    if (result === "契約") {
+      const dt = parseDateStr(row[15]);
       if (dt) {
         const mk = `${dt.getFullYear()}/${String(dt.getMonth() + 1).padStart(2, "0")}`;
         contractsByMonth[mk] = (contractsByMonth[mk] ?? 0) + 1;
@@ -215,45 +265,7 @@ export async function fetchMonthlySalesStats(): Promise<MonthlySalesStats[]> {
   const allMonths = new Set([...Object.keys(meetingsByMonth), ...Object.keys(contractsByMonth)]);
   return [...allMonths].sort().map((month) => ({
     month,
-    meetings:  meetingsByMonth[month]  ?? 0,
+    meetings: meetingsByMonth[month] ?? 0,
     contracts: contractsByMonth[month] ?? 0,
   }));
-}
-
-// ── 既存: 商談管理シート ─────────────────────────────────
-export async function fetchSheetCases(): Promise<SheetCase[]> {
-  const res = await fetch(GVIZ_URL, { next: { revalidate: 60 } });
-  if (!res.ok) throw new Error(`スプレッドシートの取得に失敗しました (HTTP ${res.status})`);
-
-  const text = await res.text();
-  const jsonText = text.replace(/^[^(]+\(/, "").replace(/\);\s*$/, "");
-
-  let json: { table: { rows: GvizRow[] } };
-  try {
-    json = JSON.parse(jsonText);
-  } catch {
-    throw new Error("スプレッドシートの解析に失敗しました。シートが公開共有されているか確認してください。");
-  }
-
-  const spSet = new Set<string>(SALESPEOPLE);
-  const cases: SheetCase[] = [];
-
-  for (const row of json.table.rows) {
-    if (!row?.c) continue;
-    // 商談担当者（列M=index12）が3名のうちの誰かである行のみ取得
-    const salesPerson = str(row.c[12]);
-    if (!spSet.has(salesPerson)) continue;
-
-    cases.push({
-      leadSource:   str(row.c[0]),
-      apoDate:      parseGvizDate(row.c[2]),
-      companyName:  str(row.c[3]),
-      appointer:    str(row.c[10]),
-      salesPerson,
-      result:       str(row.c[13]),
-      contractDate: parseGvizDate(row.c[15]),
-    });
-  }
-
-  return cases;
 }
