@@ -16,30 +16,22 @@ const LEADS_GID = "201502389"; // リード管理シート
 export const SALESPEOPLE = ["山本", "隅田", "片野"] as const;
 export type Salesperson = (typeof SALESPEOPLE)[number];
 
-// ── サービスアカウント認証 ─────────────────────────────────
+// ── OAuth2 認証（ai-asset-sales@extra-company.jp）────────
 function getAuthClient() {
-  const keyJson = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
-  if (!keyJson) {
+  const clientId     = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
+
+  if (!clientId || !clientSecret || !refreshToken) {
     throw new Error(
-      "GOOGLE_SERVICE_ACCOUNT_KEY が設定されていません。" +
-        "Vercel の環境変数にサービスアカウントのJSONを設定してください。"
+      "Google OAuth2 の環境変数が未設定です。\n" +
+      "GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / GOOGLE_REFRESH_TOKEN を Vercel に設定してください。"
     );
   }
-  let credentials: {
-    client_email: string;
-    private_key: string;
-  };
-  try {
-    credentials = JSON.parse(keyJson);
-  } catch {
-    throw new Error("GOOGLE_SERVICE_ACCOUNT_KEY の JSON パースに失敗しました。");
-  }
 
-  return new google.auth.JWT({
-    email: credentials.client_email,
-    key: credentials.private_key,
-    scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
-  });
+  const oauth2 = new google.auth.OAuth2(clientId, clientSecret);
+  oauth2.setCredentials({ refresh_token: refreshToken });
+  return oauth2;
 }
 
 // ── シートGIDからシート名に変換 ────────────────────────────
