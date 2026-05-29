@@ -460,6 +460,237 @@ function SheetCvPanel({ year, month, onSynced }: { year: number; month: number; 
   );
 }
 
+// ── 広告レポート（企画別）パネル ──────────────────────────
+interface AdCampaignReport {
+  campaignName: string;
+  adSpend: number;
+  actualCv: number;
+}
+
+function AdReportPanel() {
+  const [campaigns, setCampaigns] = useState<AdCampaignReport[]>([]);
+  const [loading,   setLoading]   = useState(true);
+  const [error,     setError]     = useState<string | null>(null);
+  const [notConfigured, setNotConfigured] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  useEffect(() => {
+    setLoading(true);
+    setError(null);
+    fetch("/api/ad-campaigns")
+      .then(r => r.json())
+      .then(d => {
+        if (d.error) {
+          setError(d.error);
+          setNotConfigured(!!d.notConfigured);
+          setCampaigns([]);
+        } else {
+          setCampaigns(Array.isArray(d) ? d : []);
+        }
+        setLoading(false);
+      })
+      .catch(() => { setError("データ取得に失敗しました"); setLoading(false); });
+  }, [refreshKey]);
+
+  const totalSpend = campaigns.reduce((s, c) => s + c.adSpend, 0);
+  const totalCv    = campaigns.reduce((s, c) => s + c.actualCv, 0);
+  const totalCpa   = totalCv > 0 ? Math.round(totalSpend / totalCv) : null;
+
+  return (
+    <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 mb-6">
+      <div className="flex items-center justify-between mb-5">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-lg bg-amber-50 flex items-center justify-center">
+            <span className="text-amber-600 font-bold text-sm">企</span>
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-gray-700">広告レポート（企画別）</h3>
+            <p className="text-xs text-gray-400">スプレッドシートの各シート（企画）から月次合計を取得</p>
+          </div>
+        </div>
+        <button
+          onClick={() => setRefreshKey(k => k + 1)}
+          disabled={loading}
+          className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-semibold disabled:opacity-50 transition-colors"
+        >
+          {loading ? "取得中..." : "最新データを取得"}
+        </button>
+      </div>
+
+      {loading && <p className="text-xs text-gray-400 py-4 text-center">スプレッドシートからデータを取得中...</p>}
+
+      {!loading && error && (
+        <div className="rounded-xl bg-amber-50 border border-amber-100 p-4">
+          {notConfigured ? (
+            <>
+              <p className="text-xs font-semibold text-amber-700 mb-3">⚙ GAS Web App の設定が必要です</p>
+              <ol className="text-xs text-amber-700 space-y-1.5 list-decimal pl-4">
+                <li>広告レポートのスプレッドシートを開く</li>
+                <li>「拡張機能」→「Apps Script」を開く</li>
+                <li>以下のコードを貼り付けてデプロイ（ウェブアプリ、全員がアクセス可）</li>
+                <li>デプロイURLを <code className="bg-amber-100 px-1 rounded">GOOGLE_AD_REPORT_GAS_URL</code> に設定</li>
+                <li>任意のトークン文字列を <code className="bg-amber-100 px-1 rounded">GOOGLE_AD_REPORT_GAS_TOKEN</code> に設定</li>
+              </ol>
+              <details className="mt-3">
+                <summary className="text-xs font-semibold text-amber-700 cursor-pointer">GAS スクリプトを表示</summary>
+                <pre className="mt-2 text-xs bg-amber-100 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap text-amber-900">{GAS_SCRIPT}</pre>
+              </details>
+            </>
+          ) : (
+            <p className="text-xs text-red-600">⚠ {error}</p>
+          )}
+        </div>
+      )}
+
+      {!loading && !error && campaigns.length === 0 && (
+        <p className="text-xs text-gray-400 py-4 text-center">データがありません</p>
+      )}
+
+      {!loading && campaigns.length > 0 && (
+        <>
+          {/* 企画別カード */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+            {campaigns.map((c) => {
+              const cpa = c.actualCv > 0 ? Math.round(c.adSpend / c.actualCv) : null;
+              return (
+                <div key={c.campaignName} className="bg-amber-50 rounded-xl p-4 border border-amber-100">
+                  <p className="text-xs font-semibold text-amber-600 mb-2 truncate" title={c.campaignName}>
+                    {c.campaignName}
+                  </p>
+                  <div className="space-y-1">
+                    <div className="flex justify-between items-baseline">
+                      <span className="text-xs text-gray-400">消化広告費</span>
+                      <span className="text-sm font-bold text-gray-800">
+                        ¥{c.adSpend.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-baseline">
+                      <span className="text-xs text-gray-400">実CV</span>
+                      <span className="text-sm font-bold text-emerald-700">{c.actualCv}件</span>
+                    </div>
+                    <div className="flex justify-between items-baseline">
+                      <span className="text-xs text-gray-400">実CPA</span>
+                      <span className="text-sm font-bold text-indigo-600">
+                        {cpa != null ? `¥${cpa.toLocaleString()}` : "—"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* 合計サマリー */}
+          <div className="flex flex-wrap gap-6 px-5 py-3 bg-gray-50 rounded-xl border border-gray-100">
+            <div className="text-center">
+              <p className="text-xs text-gray-400 mb-0.5">消化広告費 合計</p>
+              <p className="text-xl font-bold text-gray-800">¥{totalSpend.toLocaleString()}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-gray-400 mb-0.5">実CV 合計</p>
+              <p className="text-xl font-bold text-emerald-700">{totalCv}件</p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-gray-400 mb-0.5">実CPA（合算）</p>
+              <p className="text-xl font-bold text-indigo-600">
+                {totalCpa != null ? `¥${totalCpa.toLocaleString()}` : "—"}
+              </p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-gray-400 mb-0.5">企画数</p>
+              <p className="text-xl font-bold text-gray-700">{campaigns.length}企画</p>
+            </div>
+          </div>
+
+          {/* 詳細テーブル */}
+          <div className="mt-4 overflow-x-auto border border-gray-100 rounded-xl">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50">
+                  {["企画名", "消化広告費", "実CV", "実CPA"].map(h => (
+                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-400 whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {campaigns.map(c => {
+                  const cpa = c.actualCv > 0 ? Math.round(c.adSpend / c.actualCv) : null;
+                  return (
+                    <tr key={c.campaignName} className="border-t border-gray-50 hover:bg-gray-50 transition-colors">
+                      <td className="px-4 py-3.5 font-semibold text-gray-800">{c.campaignName}</td>
+                      <td className="px-4 py-3.5 font-semibold text-gray-700">¥{c.adSpend.toLocaleString()}</td>
+                      <td className="px-4 py-3.5 font-semibold text-emerald-700">{c.actualCv}件</td>
+                      <td className="px-4 py-3.5 font-semibold text-indigo-600">
+                        {cpa != null ? `¥${cpa.toLocaleString()}` : <span className="text-gray-300">—</span>}
+                      </td>
+                    </tr>
+                  );
+                })}
+                <tr className="border-t-2 border-gray-200 bg-gray-50 font-bold">
+                  <td className="px-4 py-3.5 text-gray-700">合計</td>
+                  <td className="px-4 py-3.5 text-gray-800">¥{totalSpend.toLocaleString()}</td>
+                  <td className="px-4 py-3.5 text-emerald-700">{totalCv}件</td>
+                  <td className="px-4 py-3.5 text-indigo-600">
+                    {totalCpa != null ? `¥${totalCpa.toLocaleString()}` : <span className="text-gray-300">—</span>}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+const GAS_SCRIPT = `function doGet(e) {
+  var token = e.parameter.token;
+  if (token !== '${"{YOUR_TOKEN}"}') {
+    return ContentService.createTextOutput(JSON.stringify({error:"Unauthorized"}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheets = ss.getSheets();
+  var result = [];
+
+  for (var i = 0; i < sheets.length; i++) {
+    var sheet = sheets[i];
+    var name = sheet.getName();
+    if (name === '原本') continue;
+
+    var maxRows = Math.min(sheet.getLastRow(), 10);
+    var maxCols = Math.min(sheet.getLastColumn(), 20);
+    var data = sheet.getRange(1, 1, maxRows, maxCols).getValues();
+
+    var spendCol = -1, cvCol = -1, headerRow = -1;
+    for (var r = 0; r < data.length; r++) {
+      for (var c = 0; c < data[r].length; c++) {
+        var cell = String(data[r][c]);
+        if (cell === '消化金額') { spendCol = c; headerRow = r; }
+        if (cell === '実CV') cvCol = c;
+      }
+      if (spendCol >= 0 && cvCol >= 0) break;
+    }
+    if (spendCol < 0 || cvCol < 0) continue;
+
+    var totalRow = headerRow + 1;
+    if (totalRow >= data.length) continue;
+
+    var adSpend = data[totalRow][spendCol];
+    var actualCv = data[totalRow][cvCol];
+
+    result.push({
+      campaignName: name,
+      adSpend: typeof adSpend === 'number' ? Math.round(adSpend) : 0,
+      actualCv: typeof actualCv === 'number' ? Math.round(actualCv) : 0
+    });
+  }
+
+  return ContentService.createTextOutput(JSON.stringify(result))
+    .setMimeType(ContentService.MimeType.JSON);
+}`;
+
 // ── スタイル ─────────────────────────────────────────
 const inputCls = "w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white";
 
@@ -629,6 +860,9 @@ export default function AdsPage() {
 
       {/* ── Meta CSVインポート ── */}
       {canEdit && <MetaCsvImport onImported={fetchData} />}
+
+      {/* ── 広告レポート（企画別）── */}
+      <AdReportPanel />
 
       {/* ── リード管理シート 実CV連携 ── */}
       {canEdit && <SheetCvPanel year={year} month={month} onSynced={fetchData} />}

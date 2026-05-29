@@ -201,6 +201,42 @@ export async function fetchMonthlyLeadApo(): Promise<MonthlyLeadApo[]> {
   }));
 }
 
+// ── 広告レポート（企画別月次サマリ）────────────────────────
+export interface AdCampaignReport {
+  campaignName: string;
+  adSpend: number;
+  actualCv: number;
+}
+
+let _adReportCache: { data: AdCampaignReport[]; at: number } | null = null;
+
+export async function fetchAdReport(): Promise<AdCampaignReport[]> {
+  if (_adReportCache && Date.now() - _adReportCache.at < CACHE_TTL_MS) {
+    return _adReportCache.data;
+  }
+
+  const gasUrl   = process.env.GOOGLE_AD_REPORT_GAS_URL;
+  const gasToken = process.env.GOOGLE_AD_REPORT_GAS_TOKEN;
+
+  if (!gasUrl || !gasToken) {
+    throw new Error(
+      "GOOGLE_AD_REPORT_GAS_URL / GOOGLE_AD_REPORT_GAS_TOKEN が未設定です。\n" +
+      "広告レポート用の GAS Web App を作成し、Vercel 環境変数に設定してください。"
+    );
+  }
+
+  const url = `${gasUrl}?token=${encodeURIComponent(gasToken)}`;
+  const res = await fetch(url, { cache: "no-store" });
+
+  if (!res.ok) {
+    throw new Error(`広告レポート GAS Web App の取得に失敗しました (HTTP ${res.status})`);
+  }
+
+  const data = (await res.json()) as AdCampaignReport[];
+  _adReportCache = { data, at: Date.now() };
+  return data;
+}
+
 // ── 月次サマリ: 営業管理シート ────────────────────────────
 export interface MonthlySalesStats {
   month: string;
