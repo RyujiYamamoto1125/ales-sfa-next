@@ -25,12 +25,14 @@ export async function GET(_req: NextRequest) {
   const db = sql();
 
   // ── データ取得（並列） ────────────────────────────────────────────────────
-  const [adMetrics, staff, sheetCasesRaw, adCreativeSums, agencyLeadsRow, channelOverrides, gasAdReport] = await Promise.all([
+  const [adMetrics, staff, sheetCasesRaw, adCreativeSums, adMetricsSums, agencyLeadsRow, channelOverrides, gasAdReport] = await Promise.all([
     db`SELECT * FROM ad_metrics ORDER BY date ASC`,
     db`SELECT * FROM staff_contracts WHERE active = true`,
     fetchSheetCases().catch(() => null),
     db`SELECT medium, SUM(cv_count)::int AS total_cv, SUM(spend)::int AS total_spend
-       FROM ad_creatives WHERE medium IN ('lp','instant_form') GROUP BY medium`,
+       FROM ad_creatives WHERE medium IN ('lp','instant_form') GROUP BY medium`,  // クリエイティブ分析用（チャンネル計算には使用しない）
+    db`SELECT medium, SUM(actual_cv)::int AS total_cv, SUM(ad_spend)::bigint AS total_spend
+       FROM ad_metrics WHERE medium IN ('自社広告（LP）','インスタントフォーム') GROUP BY medium`,
     db`SELECT SUM(lead_count)::int AS total FROM leads WHERE medium = 'エモロジー'`,
     db`SELECT * FROM channel_overrides`.catch(() => [] as Record<string, unknown>[]),
     fetchAdReport().catch(() => null),  // 5月以降 LP（スプレッドシート）
@@ -264,9 +266,10 @@ export async function GET(_req: NextRequest) {
   });
 
   // 広告データからリード数・消化金額を取得
-  const lpData  = (adCreativeSums as { medium: string; total_cv: number; total_spend: number }[]).find((r) => r.medium === "lp");
-  const ifData  = (adCreativeSums as { medium: string; total_cv: number; total_spend: number }[]).find((r) => r.medium === "instant_form");
-  const agLeads = Number((agencyLeadsRow as { total: number }[])[0]?.total ?? 300);
+  type MetricSum = { medium: string; total_cv: number; total_spend: number };
+  const lpData  = (adMetricsSums as MetricSum[]).find((r) => r.medium === "自社広告（LP）");
+  const ifData  = (adMetricsSums as MetricSum[]).find((r) => r.medium === "インスタントフォーム");
+  const agLeads = Number((agencyLeadsRow as { total: number }[])[0]?.total ?? 0);
   const agSpend = adMetrics.filter((m) => m.medium === "エモロジー").reduce((s, m) => s + Number(m.ad_spend ?? 0), 0);
 
   // 5月以降はGASスプレッドシートを正とする（全て自社広告（LP））
