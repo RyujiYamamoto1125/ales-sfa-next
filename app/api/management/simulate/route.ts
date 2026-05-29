@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { sql, initSchema } from "@/lib/db";
-import { fetchSheetCases } from "@/lib/sheets";
+import { fetchSheetCases, fetchAdReport } from "@/lib/sheets";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +25,7 @@ export async function GET(_req: NextRequest) {
   const db = sql();
 
   // ── データ取得（並列） ────────────────────────────────────────────────────
-  const [adMetrics, staff, sheetCasesRaw, adCreativeSums, agencyLeadsRow, channelOverrides] = await Promise.all([
+  const [adMetrics, staff, sheetCasesRaw, adCreativeSums, agencyLeadsRow, channelOverrides, gasAdReport] = await Promise.all([
     db`SELECT * FROM ad_metrics ORDER BY date ASC`,
     db`SELECT * FROM staff_contracts WHERE active = true`,
     fetchSheetCases().catch(() => null),
@@ -33,6 +33,7 @@ export async function GET(_req: NextRequest) {
        FROM ad_creatives WHERE medium IN ('lp','instant_form') GROUP BY medium`,
     db`SELECT SUM(lead_count)::int AS total FROM leads WHERE medium = 'エモロジー'`,
     db`SELECT * FROM channel_overrides`.catch(() => [] as Record<string, unknown>[]),
+    fetchAdReport().catch(() => null),  // 5月以降 LP（スプレッドシート）
   ]);
 
   // channel_overrides をキー別マップに変換
@@ -268,6 +269,11 @@ export async function GET(_req: NextRequest) {
   const agLeads = Number((agencyLeadsRow as { total: number }[])[0]?.total ?? 300);
   const agSpend = adMetrics.filter((m) => m.medium === "エモロジー").reduce((s, m) => s + Number(m.ad_spend ?? 0), 0);
 
+  // 5月以降はGASスプレッドシートを正とする（全て自社広告（LP））
+  type GasReport = { campaignName: string; adSpend: number; actualCv: number };
+  const gasLpSpend = (gasAdReport as GasReport[] | null)?.reduce((s, c) => s + c.adSpend, 0) ?? 0;
+  const gasLpCv    = (gasAdReport as GasReport[] | null)?.reduce((s, c) => s + c.actualCv, 0) ?? 0;
+
   const buildChannel = (
     name: string, key: string, color: string,
     leads: number, apo: number, contracts: number, spend: number,
@@ -298,10 +304,10 @@ export async function GET(_req: NextRequest) {
       agOverride ? agOverride.contract_count : chContract.agency,
       agOverride ? agOverride.spend || agSpend : agSpend),
     buildChannel("自社広告（LP）",       "lp",     "#4f46e5",
-      lpOverride ? lpOverride.leads || (lpData?.total_cv ?? 0) : (lpData?.total_cv ?? 0),
+      lpOverride ? lpOverride.leads || ((lpData?.total_cv ?? 0) + gasLpCv) : (lpData?.total_cv ?? 0) + gasLpCv,
       lpOverride ? lpOverride.apo_count      : chApo.lp,
       lpOverride ? lpOverride.contract_count : chContract.lp,
-      lpOverride ? lpOverride.spend || (lpData?.total_spend ?? 0) : (lpData?.total_spend ?? 0)),
+      lpOverride ? lpOverride.spend || ((lpData?.total_spend ?? 0) + gasLpSpend) : (lpData?.total_spend ?? 0) + gasLpSpend),
     buildChannel("インスタントフォーム", "if",     "#0891b2",
       ifOverride ? ifOverride.leads || (ifData?.total_cv ?? 0) : (ifData?.total_cv ?? 0),
       ifOverride ? ifOverride.apo_count      : chApo.if,
