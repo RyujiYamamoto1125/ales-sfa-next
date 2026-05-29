@@ -11,7 +11,6 @@ const NAV = [
   { href: "/dashboard",  label: "ダッシュボード",  icon: LayoutDashboard, roles: ["admin","sales","appointer"] },
   { href: "/monthly",    label: "月次数値確認",    icon: CalendarDays,    roles: ["admin","sales","appointer"] },
   { href: "/management", label: "経営管理",         icon: Building2,       roles: ["admin"] },
-  { href: "/ads",        label: "広告数値入力",     icon: Megaphone,       roles: ["admin","sales"] },
 ];
 
 const ROLE_LABEL: Record<string, string> = {

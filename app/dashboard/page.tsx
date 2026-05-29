@@ -658,6 +658,10 @@ export default function DashboardPage() {
   const [totalLeads, setTotalLeads]     = useState<number>(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // 広告数値
+  const [adCurrent,    setAdCurrent]    = useState<{ spend: number; cv: number } | null>(null);
+  const [adCumulative, setAdCumulative] = useState<{ spend: number; cv: number } | null>(null);
+
   const fetchData = useCallback((silent = false) => {
     if (!silent) setLoading(true); else setSpinning(true);
     setError(null);
@@ -691,6 +695,32 @@ export default function DashboardPage() {
   }, [creativeLoaded]);
 
   useEffect(() => { fetchData(false); }, [fetchData]);
+
+  // 広告数値フェッチ
+  useEffect(() => {
+    // 当月（GASスプレッドシート）
+    fetch("/api/ad-campaigns")
+      .then(r => r.json())
+      .then(d => {
+        if (Array.isArray(d)) {
+          const spend = d.reduce((s: number, c: { adSpend: number }) => s + c.adSpend, 0);
+          const cv    = d.reduce((s: number, c: { actualCv: number }) => s + c.actualCv, 0);
+          setAdCurrent({ spend, cv });
+        }
+      })
+      .catch(() => {});
+    // 累計（DB）
+    fetch("/api/ad-metrics")
+      .then(r => r.json())
+      .then(d => {
+        if (Array.isArray(d)) {
+          const spend = d.reduce((s: number, r: { ad_spend: number }) => s + Number(r.ad_spend), 0);
+          const cv    = d.reduce((s: number, r: { actual_cv: number }) => s + Number(r.actual_cv), 0);
+          setAdCumulative({ spend, cv });
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     fetch("/api/monthly-summary")
@@ -812,6 +842,48 @@ export default function DashboardPage() {
         {/* ── 概要タブ ── */}
         {activeTab === "overview" && (
           <div className="space-y-6">
+
+            {/* ── 広告数値 ── */}
+            {(adCurrent || adCumulative) && (
+              <div>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">広告数値</p>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+                    <p className="text-xs font-medium text-gray-400 mb-1">当月 消化広告費</p>
+                    <p className="text-2xl font-bold text-gray-800 leading-none">
+                      {adCurrent ? fmtYen(adCurrent.spend) : "—"}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1">スプレッドシート連携</p>
+                  </div>
+                  <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+                    <p className="text-xs font-medium text-gray-400 mb-1">当月 実CV</p>
+                    <p className="text-2xl font-bold text-emerald-700 leading-none">
+                      {adCurrent ? `${adCurrent.cv}件` : "—"}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      実CPA：{adCurrent && adCurrent.cv > 0 ? fmtYen(Math.round(adCurrent.spend / adCurrent.cv)) : "—"}
+                    </p>
+                  </div>
+                  <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+                    <p className="text-xs font-medium text-gray-400 mb-1">累計 消化広告費</p>
+                    <p className="text-2xl font-bold text-gray-800 leading-none">
+                      {adCumulative && adCumulative.spend > 0 ? fmtYen(adCumulative.spend) : "—"}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1">全期間合計</p>
+                  </div>
+                  <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+                    <p className="text-xs font-medium text-gray-400 mb-1">累計 実CV</p>
+                    <p className="text-2xl font-bold text-emerald-700 leading-none">
+                      {adCumulative && adCumulative.cv > 0 ? `${adCumulative.cv}件` : "—"}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      累計CPA：{adCumulative && adCumulative.cv > 0 ? fmtYen(Math.round(adCumulative.spend / adCumulative.cv)) : "—"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* ── 集客ファネル ── */}
             <div>
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">集客ファネル（累計・全期間）</p>
