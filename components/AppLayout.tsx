@@ -1,6 +1,7 @@
 "use client";
 
 import Sidebar from "./Sidebar";
+import ChatBot from "./ChatBot";
 import { Bell, Search } from "lucide-react";
 import { useSession } from "next-auth/react";
 
@@ -52,6 +53,8 @@ export default function AppLayout({ title, actions, children }: Props) {
           {children}
         </main>
       </div>
+
+      <ChatBot />
     </div>
   );
 }
