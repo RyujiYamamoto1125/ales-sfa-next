@@ -35,55 +35,41 @@ export async function POST(req: NextRequest) {
     db`SELECT date, medium, ad_spend, dashboard_cv, actual_cv, clicks, impressions FROM ad_metrics ORDER BY date DESC LIMIT 100`,
   ]);
 
+  const totalContracted = cases.filter((c) => c.status === "契約");
+
   // 今月集計
+  const thisMonthCases = cases.filter((c) => {
+    const d = new Date(c.created_at as string);
+    return d.getFullYear() === year && d.getMonth() + 1 === month;
+  });
   const thisMonthContracted = cases.filter((c) => {
     if (c.status !== "契約" || !c.contracted_at) return false;
     const d = new Date(c.contracted_at as string);
     return d.getFullYear() === year && d.getMonth() + 1 === month;
   });
-
-  const thisMonthApo = cases.filter((c) => {
-    const d = new Date(c.created_at as string);
-    return d.getFullYear() === year && d.getMonth() + 1 === month;
-  });
-
-  const totalContracted = cases.filter((c) => c.status === "契約");
-
   const thisMonthLeads = leads.filter((l) => {
     const d = new Date(l.date as string);
     return d.getFullYear() === year && d.getMonth() + 1 === month;
   });
-
   const totalLeadsThisMonth = thisMonthLeads.reduce((s, l) => s + Number(l.lead_count), 0);
   const thisMonthInitialFee = thisMonthContracted.reduce((s, c) => s + Number(c.initial_fee ?? 0), 0);
   const thisMonthMonthlyFee = thisMonthContracted.reduce((s, c) => s + Number(c.monthly_fee ?? 0), 0);
   const totalInitialFee = totalContracted.reduce((s, c) => s + Number(c.initial_fee ?? 0), 0);
   const totalMonthlyFee = totalContracted.reduce((s, c) => s + Number(c.monthly_fee ?? 0), 0);
 
-  // 営業マン別集計（今月）
-  const spMap: Record<string, { apo: number; contracts: number; initialFee: number; monthlyFee: number }> = {};
-  thisMonthApo.forEach((c) => {
-    const sp = (c.sales_person as string)?.trim();
-    if (!sp) return;
-    if (!spMap[sp]) spMap[sp] = { apo: 0, contracts: 0, initialFee: 0, monthlyFee: 0 };
-    spMap[sp].apo++;
-  });
-  thisMonthContracted.forEach((c) => {
-    const sp = (c.sales_person as string)?.trim();
-    if (!sp) return;
-    if (!spMap[sp]) spMap[sp] = { apo: 0, contracts: 0, initialFee: 0, monthlyFee: 0 };
-    spMap[sp].contracts++;
-    spMap[sp].initialFee += Number(c.initial_fee ?? 0);
-    spMap[sp].monthlyFee += Number(c.monthly_fee ?? 0);
-  });
+  // 今月の目標
+  const currentTarget = targets.find(
+    (t) => Number(t.year) === year && Number(t.month) === month
+  );
 
-  const spStats = Object.entries(spMap)
-    .map(([name, v]) => ({
-      name,
-      ...v,
-      contractRate: v.apo > 0 ? Math.round((v.contracts / v.apo) * 100) : 0,
-    }))
-    .sort((a, b) => b.contracts - a.contracts);
+  // 広告費集計（今月）
+  const thisMonthAd = adMetrics.filter((a) => {
+    const d = new Date(a.date as string);
+    return d.getFullYear() === year && d.getMonth() + 1 === month;
+  });
+  const totalAdSpend = thisMonthAd.reduce((s, a) => s + Number(a.ad_spend ?? 0), 0);
+  const totalActualCv = thisMonthAd.reduce((s, a) => s + Number(a.actual_cv ?? 0), 0);
+  const cpaCost = totalActualCv > 0 ? Math.round(totalAdSpend / totalActualCv) : null;
 
   // ステータス別
   const statusMap: Record<string, number> = {};
@@ -101,29 +87,82 @@ export async function POST(req: NextRequest) {
     if (c.status === "契約") sourceMap[src].contracted++;
   });
 
-  // 今月の目標
-  const currentTarget = targets.find(
-    (t) => Number(t.year) === year && Number(t.month) === month
-  );
+  // 営業マン×月別集計（created_at基準で商談数、contracted_at基準で契約数）
+  type MonthlySpStat = { cases: number; contracts: number; initialFee: number; monthlyFee: number };
+  const spMonthlyMap: Record<string, Record<string, MonthlySpStat>> = {};
 
-  // 広告費集計（今月）
-  const thisMonthAd = adMetrics.filter((a) => {
-    const d = new Date(a.date as string);
-    return d.getFullYear() === year && d.getMonth() + 1 === month;
+  cases.forEach((c) => {
+    const sp = (c.sales_person as string)?.trim();
+    if (!sp) return;
+    const d = new Date(c.created_at as string);
+    const ym = `${d.getFullYear()}年${d.getMonth() + 1}月`;
+    if (!spMonthlyMap[sp]) spMonthlyMap[sp] = {};
+    if (!spMonthlyMap[sp][ym]) spMonthlyMap[sp][ym] = { cases: 0, contracts: 0, initialFee: 0, monthlyFee: 0 };
+    spMonthlyMap[sp][ym].cases++;
   });
-  const totalAdSpend = thisMonthAd.reduce((s, a) => s + Number(a.ad_spend ?? 0), 0);
-  const totalActualCv = thisMonthAd.reduce((s, a) => s + Number(a.actual_cv ?? 0), 0);
-  const cpaCost = totalActualCv > 0 ? Math.round(totalAdSpend / totalActualCv) : null;
+
+  cases.forEach((c) => {
+    if (c.status !== "契約" || !c.contracted_at) return;
+    const sp = (c.sales_person as string)?.trim();
+    if (!sp) return;
+    const d = new Date(c.contracted_at as string);
+    const ym = `${d.getFullYear()}年${d.getMonth() + 1}月`;
+    if (!spMonthlyMap[sp]) spMonthlyMap[sp] = {};
+    if (!spMonthlyMap[sp][ym]) spMonthlyMap[sp][ym] = { cases: 0, contracts: 0, initialFee: 0, monthlyFee: 0 };
+    spMonthlyMap[sp][ym].contracts++;
+    spMonthlyMap[sp][ym].initialFee += Number(c.initial_fee ?? 0);
+    spMonthlyMap[sp][ym].monthlyFee += Number(c.monthly_fee ?? 0);
+  });
+
+  const spMonthlyText = Object.entries(spMonthlyMap).map(([sp, months]) => {
+    const rows = Object.entries(months)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([ym, v]) => {
+        const rate = v.cases > 0 ? Math.round((v.contracts / v.cases) * 100) : 0;
+        return `  ${ym}: 商談${v.cases}件 / 契約${v.contracts}件 / 契約率${rate}% / 初期¥${v.initialFee.toLocaleString()} / 月額¥${v.monthlyFee.toLocaleString()}`;
+      })
+      .join("\n");
+    const totalCases = Object.values(months).reduce((s, v) => s + v.cases, 0);
+    const totalContracts = Object.values(months).reduce((s, v) => s + v.contracts, 0);
+    const totalRate = totalCases > 0 ? Math.round((totalContracts / totalCases) * 100) : 0;
+    return `【${sp}】累計: 商談${totalCases}件 / 契約${totalContracts}件 / 契約率${totalRate}%\n${rows}`;
+  }).join("\n\n");
+
+  // 月別全体集計
+  const monthlyTotalMap: Record<string, { cases: number; contracts: number; initialFee: number; monthlyFee: number }> = {};
+  cases.forEach((c) => {
+    const d = new Date(c.created_at as string);
+    const ym = `${d.getFullYear()}年${d.getMonth() + 1}月`;
+    if (!monthlyTotalMap[ym]) monthlyTotalMap[ym] = { cases: 0, contracts: 0, initialFee: 0, monthlyFee: 0 };
+    monthlyTotalMap[ym].cases++;
+  });
+  cases.forEach((c) => {
+    if (c.status !== "契約" || !c.contracted_at) return;
+    const d = new Date(c.contracted_at as string);
+    const ym = `${d.getFullYear()}年${d.getMonth() + 1}月`;
+    if (!monthlyTotalMap[ym]) monthlyTotalMap[ym] = { cases: 0, contracts: 0, initialFee: 0, monthlyFee: 0 };
+    monthlyTotalMap[ym].contracts++;
+    monthlyTotalMap[ym].initialFee += Number(c.initial_fee ?? 0);
+    monthlyTotalMap[ym].monthlyFee += Number(c.monthly_fee ?? 0);
+  });
+
+  const monthlyTotalText = Object.entries(monthlyTotalMap)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([ym, v]) => {
+      const rate = v.cases > 0 ? Math.round((v.contracts / v.cases) * 100) : 0;
+      return `- ${ym}: 商談${v.cases}件 / 契約${v.contracts}件 / 契約率${rate}% / 初期¥${v.initialFee.toLocaleString()} / 月額¥${v.monthlyFee.toLocaleString()}`;
+    })
+    .join("\n");
 
   const context = `
-# 営業SFA データサマリー（${year}年${month}月現在）
+# 営業SFA 全データサマリー（${year}年${month}月現在）
 
 ## 今月の主要KPI
-- アポ件数: ${thisMonthApo.length}件
+- 商談数: ${thisMonthCases.length}件
 - 契約件数: ${thisMonthContracted.length}件（目標: ${currentTarget?.target_count ?? "未設定"}件）
-- 成約率: ${thisMonthApo.length > 0 ? Math.round((thisMonthContracted.length / thisMonthApo.length) * 100) : 0}%
+- 契約率: ${thisMonthCases.length > 0 ? Math.round((thisMonthContracted.length / thisMonthCases.length) * 100) : 0}%
 - リード数: ${totalLeadsThisMonth}件
-- アポ率: ${totalLeadsThisMonth > 0 ? Math.round((thisMonthApo.length / totalLeadsThisMonth) * 100) : 0}%
+- アポ率: ${totalLeadsThisMonth > 0 ? Math.round((thisMonthCases.length / totalLeadsThisMonth) * 100) : 0}%
 - 今月初期費用合計: ¥${thisMonthInitialFee.toLocaleString()}
 - 今月月額費用合計: ¥${thisMonthMonthlyFee.toLocaleString()}
 
@@ -133,8 +172,11 @@ export async function POST(req: NextRequest) {
 - 累計初期費用: ¥${totalInitialFee.toLocaleString()}
 - 累計月額費用: ¥${totalMonthlyFee.toLocaleString()}
 
-## 今月の営業マン別実績
-${spStats.map((s) => `- ${s.name}: アポ${s.apo}件 / 契約${s.contracts}件 / 成約率${s.contractRate}% / 初期¥${s.initialFee.toLocaleString()} / 月額¥${s.monthlyFee.toLocaleString()}`).join("\n") || "データなし"}
+## 月別全体推移（商談数は案件登録日、契約数は契約日ベース）
+${monthlyTotalText || "データなし"}
+
+## 営業マン別・月別実績（商談数=案件登録日ベース / 契約数=契約日ベース）
+${spMonthlyText || "データなし"}
 
 ## 全期間ステータス別件数
 ${Object.entries(statusMap).map(([k, v]) => `- ${k}: ${v}件`).join("\n")}
@@ -154,7 +196,11 @@ ${salesTargets
   .join("\n") || "設定なし"}
 `;
 
-  const systemPrompt = `あなたは営業SFAシステムのアシスタントです。以下の最新データを元に、営業数値・案件状況・目標達成状況などの質問に日本語で回答してください。数値は具体的に、簡潔にまとめてください。
+  const systemPrompt = `あなたは営業SFAシステムのアシスタントです。以下の最新データを元に、営業数値・案件状況・目標達成状況などの質問に日本語で回答してください。
+- 数値は具体的に、簡潔にまとめてください
+- データが存在する場合は必ず数値を出してください。「データがない」とは絶対に言わないでください
+- 複数のデータを照合・計算して回答が導ける場合は積極的に計算して答えてください
+- 月別・営業マン別など集計が必要な場合は、提供されたデータから集計して回答してください
 
 ${context}`;
 
