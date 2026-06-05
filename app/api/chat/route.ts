@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { sql } from "@/lib/db";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import Anthropic from "@anthropic-ai/sdk";
 
 export const dynamic = "force-dynamic";
 
@@ -12,11 +12,11 @@ export async function POST(req: NextRequest) {
   const { message, history } = await req.json();
   if (!message) return NextResponse.json({ error: "message required" }, { status: 400 });
 
-  if (!process.env.GEMINI_API_KEY) {
+  if (!process.env.ANTHROPIC_API_KEY) {
     return NextResponse.json(
       {
         error:
-          "GEMINI_API_KEY が設定されていません。https://aistudio.google.com/apikey で無料取得後、.env.local と Vercel 環境変数に GEMINI_API_KEY=xxx を追加してください。",
+          "ANTHROPIC_API_KEY が設定されていません。https://console.anthropic.com/settings/keys でAPIキーを取得後、.env.local と Vercel 環境変数に ANTHROPIC_API_KEY=xxx を追加してください。",
       },
       { status: 503 }
     );
@@ -158,21 +158,23 @@ ${salesTargets
 
 ${context}`;
 
-  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-  const model = genAI.getGenerativeModel({
-    model: "gemini-2.0-flash",
-    systemInstruction: systemPrompt,
+  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+  const chatHistory = (history ?? [])
+    .filter((h: { role: string; content: string }) => h.role === "user" || h.role === "assistant")
+    .map((h: { role: string; content: string }) => ({
+      role: h.role as "user" | "assistant",
+      content: h.content,
+    }));
+
+  const response = await client.messages.create({
+    model: "claude-haiku-4-5-20251001",
+    max_tokens: 1024,
+    system: systemPrompt,
+    messages: [...chatHistory, { role: "user", content: message }],
   });
 
-  // 会話履歴をGemini形式に変換
-  const chatHistory = (history ?? []).map((h: { role: string; content: string }) => ({
-    role: h.role === "assistant" ? "model" : "user",
-    parts: [{ text: h.content }],
-  }));
-
-  const chat = model.startChat({ history: chatHistory });
-  const result = await chat.sendMessage(message);
-  const reply = result.response.text();
+  const reply = response.content[0].type === "text" ? response.content[0].text : "";
 
   return NextResponse.json({ reply });
 }
