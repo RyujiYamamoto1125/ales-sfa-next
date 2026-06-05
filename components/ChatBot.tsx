@@ -21,7 +21,7 @@ export default function ChatBot() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (open && messages.length === 0) {
@@ -163,19 +163,20 @@ export default function ChatBot() {
 
           {/* 入力欄 */}
           <div className="p-3 border-t border-gray-100 shrink-0">
-            <div className="flex gap-2 items-center bg-gray-50 rounded-xl px-3 py-2">
-              <input
+            <div className="flex gap-2 items-end bg-gray-50 rounded-xl px-3 py-2">
+              <textarea
                 ref={inputRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
+                  if (e.key === "Enter" && e.shiftKey) {
                     e.preventDefault();
                     send();
                   }
                 }}
-                placeholder="質問を入力..."
-                className="flex-1 bg-transparent text-sm text-gray-700 placeholder-gray-400 outline-none"
+                placeholder="質問を入力... (Shift+Enter で送信)"
+                rows={1}
+                className="flex-1 bg-transparent text-sm text-gray-700 placeholder-gray-400 outline-none resize-none max-h-24 overflow-y-auto"
                 disabled={loading}
               />
               <button
