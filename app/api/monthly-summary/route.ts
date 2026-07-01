@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { sql, initSchema } from "@/lib/db";
-import { fetchMonthlyLeadApo, fetchMonthlySalesStats } from "@/lib/sheets";
+import { fetchMonthlyLeadApo, fetchMonthlySalesStats, fetchMonthlyActualCv } from "@/lib/sheets";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +12,7 @@ export async function GET() {
   await initSchema();
   const db = sql();
 
-  const [leadApoData, salesData, adRows, agencyLeads, lpOverride, ifLeads] = await Promise.all([
+  const [leadApoData, salesData, adRows, agencyLeads, lpOverride, ifLeads, actualCvData] = await Promise.all([
     fetchMonthlyLeadApo(),
     fetchMonthlySalesStats(),
     db`
@@ -23,6 +23,7 @@ export async function GET() {
     db`SELECT SUM(lead_count)::int as total FROM leads`.catch(() => [{ total: 0 }]),
     db`SELECT leads FROM channel_overrides WHERE channel_key = 'lp' LIMIT 1`.catch(() => []),
     db`SELECT SUM(cv_count)::int as total FROM ad_creatives WHERE medium = 'instant_form'`.catch(() => [{ total: 0 }]),
+    fetchMonthlyActualCv().catch(() => []),
   ]);
 
   // 全チャネル合計リード数
@@ -35,14 +36,17 @@ export async function GET() {
     ...leadApoData.map((r) => r.month),
     ...salesData.map((r) => r.month),
     ...adRows.map((r) => r.month as string),
+    ...actualCvData.map((r) => r.month),
   ]);
 
   const result = [...allMonths].sort().reverse().map((month) => {
     const la = leadApoData.find((r) => r.month === month);
     const ss = salesData.find((r) => r.month === month);
+    // 数値管理シートに当月の実CVがあれば、それを月別リード数として優先採用
+    const acv = actualCvData.find((r) => r.month === month);
     return {
       month,
-      leads:     la?.leads     ?? 0,
+      leads:     acv ? acv.actualCv : (la?.leads ?? 0),
       apo:       la?.apo       ?? 0,
       meetings:  ss?.meetings  ?? 0,
       contracts: ss?.contracts ?? 0,

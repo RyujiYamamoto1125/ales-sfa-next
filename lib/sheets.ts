@@ -201,6 +201,84 @@ export async function fetchMonthlyLeadApo(): Promise<MonthlyLeadApo[]> {
   }));
 }
 
+// ── 数値管理シート: 月次 実CV（= 月別リード数）────────────
+// 別スプレッドシート「数値管理」シートの各月「実CV」列を月次リード数として取得。
+// A列 "YYYY年M月" / B列 管理画面CV / C列 実CV。行は月ごとに増える（6月=2行目, 7月=3行目…）。
+// 環境変数で上書き可（未設定時は本番シートを既定値として使用）。
+const NUMBERS_SHEET_ID  =
+  process.env.GOOGLE_NUMBERS_SHEET_ID  ?? "1QX-mpa2pGICFSQiAHCXGgn98DUD7-jpWOK5Pnam52wA";
+const NUMBERS_SHEET_GID =
+  process.env.GOOGLE_NUMBERS_SHEET_GID ?? "753781064";
+
+export interface MonthlyActualCv {
+  month: string;    // "YYYY/MM"
+  actualCv: number; // 実CV = リード数
+}
+
+let _actualCvCache: { data: MonthlyActualCv[]; at: number } | null = null;
+
+// gviz CSV は各セルを二重引用符で囲む。埋め込みカンマ・改行・エスケープ("")に対応した最小パーサー。
+function parseCsv(text: string): string[][] {
+  const rows: string[][] = [];
+  let field = "";
+  let row: string[] = [];
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') { field += '"'; i++; }
+        else inQuotes = false;
+      } else {
+        field += ch;
+      }
+    } else {
+      if (ch === '"') inQuotes = true;
+      else if (ch === ",") { row.push(field); field = ""; }
+      else if (ch === "\n") { row.push(field); rows.push(row); row = []; field = ""; }
+      else if (ch === "\r") { /* skip CR */ }
+      else field += ch;
+    }
+  }
+  if (field.length > 0 || row.length > 0) { row.push(field); rows.push(row); }
+  return rows;
+}
+
+export async function fetchMonthlyActualCv(): Promise<MonthlyActualCv[]> {
+  if (_actualCvCache && Date.now() - _actualCvCache.at < CACHE_TTL_MS) {
+    return _actualCvCache.data;
+  }
+
+  const url = `https://docs.google.com/spreadsheets/d/${NUMBERS_SHEET_ID}/gviz/tq?tqx=out:csv&gid=${NUMBERS_SHEET_GID}`;
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(`数値管理シートの取得に失敗しました (HTTP ${res.status})`);
+  }
+
+  const rows = parseCsv(await res.text());
+  const result: MonthlyActualCv[] = [];
+
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row) continue;
+
+    const label = (row[0] ?? "").trim();           // "2026年6月"
+    const lm = label.match(/(\d{4})年\s*(\d{1,2})月/);
+    if (!lm) continue;
+
+    // C列（実CV）を数値化。空欄は 0 扱い。
+    const cvRaw = (row[2] ?? "").replace(/[^\d\-]/g, "");
+    const actualCv = cvRaw === "" ? 0 : parseInt(cvRaw, 10);
+    if (!Number.isFinite(actualCv)) continue;
+
+    result.push({ month: `${lm[1]}/${lm[2].padStart(2, "0")}`, actualCv });
+  }
+
+  _actualCvCache = { data: result, at: Date.now() };
+  return result;
+}
+
 // ── 広告レポート（企画別月次サマリ）────────────────────────
 export interface AdCampaignReport {
   campaignName: string;
