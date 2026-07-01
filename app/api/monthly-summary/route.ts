@@ -12,7 +12,7 @@ export async function GET() {
   await initSchema();
   const db = sql();
 
-  const [leadApoData, salesData, adRows, agencyLeads, lpOverride, ifLeads, actualCvData] = await Promise.all([
+  const [leadApoData, salesData, adRows, actualCvData] = await Promise.all([
     fetchMonthlyLeadApo(),
     fetchMonthlySalesStats(),
     db`
@@ -20,17 +20,8 @@ export async function GET() {
       FROM ad_metrics
       GROUP BY month ORDER BY month
     `,
-    db`SELECT SUM(lead_count)::int as total FROM leads`.catch(() => [{ total: 0 }]),
-    db`SELECT leads FROM channel_overrides WHERE channel_key = 'lp' LIMIT 1`.catch(() => []),
-    db`SELECT SUM(cv_count)::int as total FROM ad_creatives WHERE medium = 'instant_form'`.catch(() => [{ total: 0 }]),
     fetchMonthlyActualCv().catch(() => []),
   ]);
-
-  // 全チャネル合計リード数
-  const agLeadsTotal = Number((agencyLeads as { total: number }[])[0]?.total ?? 0);
-  const lpLeadsTotal = Number((lpOverride as { leads: number }[])[0]?.leads ?? 0);
-  const ifLeadsTotal = Number((ifLeads as { total: number }[])[0]?.total ?? 0);
-  const totalLeadsAllChannels = agLeadsTotal + lpLeadsTotal + ifLeadsTotal;
 
   const allMonths = new Set([
     ...leadApoData.map((r) => r.month),
@@ -53,6 +44,10 @@ export async function GET() {
       adSpend:   Number(adRows.find((r) => r.month === month)?.ad_spend ?? 0),
     };
   });
+
+  // 全期間リード数 = 各月リード数（実CV優先・無い月は従来集計）の合計
+  // → 月別ビューの合計と一致し、実CV（例: 2026/06=178）が反映される
+  const totalLeadsAllChannels = result.reduce((s, r) => s + r.leads, 0);
 
   return NextResponse.json({ monthly: result, totalLeadsAllChannels });
 }
